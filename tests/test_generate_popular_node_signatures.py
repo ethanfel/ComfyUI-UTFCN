@@ -470,6 +470,59 @@ alias = NODE_CLASS_MAPPINGS
             "alias-setdefault-duplicate-node-pack",
         )
 
+    def test_duplicate_node_id_from_multi_target_mapping_alias_skips_static_node(self):
+        self._assert_duplicate_node_id_from_alias_mutation_skips_static_node(
+            'alias = other = NODE_CLASS_MAPPINGS\nalias["DupNode"] = DynamicDupNode',
+            "multi-target-alias-duplicate-node-pack",
+        )
+
+    def test_ambiguous_mapping_mutation_key_suppresses_static_nodes(self):
+        source_a = '''
+class StaticDupNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "DupNode": StaticDupNode,
+}
+'''
+        source_b = '''
+def get_id():
+    return "DupNode"
+
+
+class DynamicDupNode:
+    RETURN_TYPES = ("MASK",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "mask": ("MASK",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {}
+NODE_CLASS_MAPPINGS[get_id()] = DynamicDupNode
+'''
+        result = self._extract_two_sources(
+            source_a,
+            source_b,
+            "ambiguous-mapping-key-duplicate-node-pack",
+        )
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
     def test_unsupported_reassignment_invalidates_static_env_value(self):
         source = '''
 def build_inputs():
