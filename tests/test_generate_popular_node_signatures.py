@@ -150,6 +150,59 @@ NODE_CLASS_MAPPINGS = {
         self.assertIn("GoodNode", result["nodes"])
         self.assertEqual("ok", result["pack"]["status"])
 
+    def test_skips_undecodable_python_files_without_modified_parse(self):
+        undecodable_source = b'''
+# invalid byte follows: \xff
+class UndecodableNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "UndecodableNode": UndecodableNode,
+}
+'''
+        good_source = '''
+class GoodUtf8Node:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "GoodUtf8Node": GoodUtf8Node,
+}
+'''
+        with tempfile.TemporaryDirectory() as tmp:
+            Path(tmp, "bad.py").write_bytes(undecodable_source)
+            Path(tmp, "good.py").write_text(textwrap.dedent(good_source), encoding="utf-8")
+            result = extract_repo_signatures(
+                Path(tmp),
+                {
+                    "id": "undecodable-pack",
+                    "title": "Undecodable Pack",
+                    "repository": "https://github.com/example/undecodable-pack",
+                    "rank": 1,
+                },
+            )
+
+        self.assertNotIn("UndecodableNode", result["nodes"])
+        self.assertIn("GoodUtf8Node", result["nodes"])
+        self.assertEqual("ok", result["pack"]["status"])
+
     def test_unsupported_reassignment_invalidates_static_env_value(self):
         source = '''
 def build_inputs():
@@ -187,6 +240,121 @@ NODE_CLASS_MAPPINGS = {
                     "rank": 1,
                 },
             )
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_function_binding_invalidates_static_env_value(self):
+        source = '''
+INPUTS = {
+    "required": {
+        "image": ("IMAGE",),
+    },
+}
+
+
+def INPUTS():
+    return {}
+
+
+class FunctionRebindNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return INPUTS
+
+
+NODE_CLASS_MAPPINGS = {
+    "FunctionRebindNode": FunctionRebindNode,
+}
+'''
+        result = self._extract_source(source, "function-rebind-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_class_binding_invalidates_static_env_value(self):
+        source = '''
+INPUTS = {
+    "required": {
+        "image": ("IMAGE",),
+    },
+}
+
+
+class INPUTS:
+    pass
+
+
+class ClassRebindNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return INPUTS
+
+
+NODE_CLASS_MAPPINGS = {
+    "ClassRebindNode": ClassRebindNode,
+}
+'''
+        result = self._extract_source(source, "class-rebind-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_import_binding_invalidates_static_env_value(self):
+        source = '''
+INPUTS = {
+    "required": {
+        "image": ("IMAGE",),
+    },
+}
+import something as INPUTS
+
+
+class ImportRebindNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return INPUTS
+
+
+NODE_CLASS_MAPPINGS = {
+    "ImportRebindNode": ImportRebindNode,
+}
+'''
+        result = self._extract_source(source, "import-rebind-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_alias_mutation_invalidates_static_source_value(self):
+        source = '''
+INPUTS = {
+    "required": {
+        "image": ("IMAGE",),
+    },
+}
+ALIAS = INPUTS
+ALIAS.clear()
+
+
+class AliasMutatedInputNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return INPUTS
+
+
+NODE_CLASS_MAPPINGS = {
+    "AliasMutatedInputNode": AliasMutatedInputNode,
+}
+'''
+        result = self._extract_source(source, "alias-mutated-input-pack")
 
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
