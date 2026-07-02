@@ -39,6 +39,7 @@ if hasattr(ast, "TryStar"):
 _CLASS_SIGNATURE_ATTRS = {"INPUT_TYPES", "RETURN_NAMES", "RETURN_TYPES"}
 _DYNAMIC_NAMESPACE_MUTATION = object()
 _NAMESPACE_FUNCTIONS = {"globals", "locals", "vars"}
+_NAMESPACE_DUNDER_MUTATORS = {"__delitem__", "__setitem__"}
 
 
 def _literal(node, env, allow_mutable_env=True):
@@ -215,6 +216,10 @@ def _namespace_mutating_call_target_names(node):
         return set()
     if _namespace_call_function_name(node.func.value) is None:
         return set()
+    if node.func.attr in _NAMESPACE_DUNDER_MUTATORS:
+        if node.args and isinstance(node.args[0], ast.Constant) and isinstance(node.args[0].value, str):
+            return {node.args[0].value}
+        return {_DYNAMIC_NAMESPACE_MUTATION}
     if node.func.attr not in _MUTATING_METHODS:
         return set()
     if node.func.attr != "update":
@@ -879,8 +884,8 @@ def _collect_module_env(tree, class_bindings=None):
 def normalise_input_spec(spec):
     first = spec[0] if isinstance(spec, (list, tuple)) and spec else spec
     if isinstance(first, list):
-        return "COMBO"
-    return str(first)
+        return "COMBO" if all(isinstance(value, str) for value in first) else None
+    return first if isinstance(first, str) else None
 
 
 def _class_defs(tree):
@@ -1545,7 +1550,16 @@ def _namespace_alias_mutation_target_names(stmt, aliases):
         def visit_Call(self, node):
             if isinstance(node.func, ast.Attribute):
                 if isinstance(node.func.value, ast.Name) and node.func.value.id in aliases:
-                    if node.func.attr == "update":
+                    if node.func.attr in _NAMESPACE_DUNDER_MUTATORS:
+                        if (
+                            node.args
+                            and isinstance(node.args[0], ast.Constant)
+                            and isinstance(node.args[0].value, str)
+                        ):
+                            names.add(node.args[0].value)
+                        else:
+                            names.add(_DYNAMIC_NAMESPACE_MUTATION)
+                    elif node.func.attr == "update":
                         for keyword in node.keywords:
                             names.add(_DYNAMIC_NAMESPACE_MUTATION if keyword.arg is None else keyword.arg)
                         if node.args or not node.keywords:
@@ -1772,16 +1786,26 @@ def _signature_from_class(node_type, cls, display, pack_meta, class_env, input_e
         else:
             values = {}
         for name, spec in values.items():
-            inputs[str(name)] = normalise_input_spec(spec)
+            if not isinstance(name, str):
+                return None
+            input_type = normalise_input_spec(spec)
+            if input_type is None:
+                return None
+            inputs[name] = input_type
             if section == "required":
-                required.append(str(name))
+                required.append(name)
 
     output_names = []
     if return_names is _MISSING:
         output_names = []
     elif isinstance(return_names, (list, tuple)):
-        output_names = [str(name) for name in return_names]
+        if not all(isinstance(name, str) for name in return_names):
+            return None
+        output_names = list(return_names)
     else:
+        return None
+
+    if not all(isinstance(value, str) for value in return_types):
         return None
 
     return {
@@ -1791,7 +1815,7 @@ def _signature_from_class(node_type, cls, display, pack_meta, class_env, input_e
         "repository": pack_meta.get("repository", ""),
         "inputs": inputs,
         "required": required,
-        "outputs": [str(value) for value in return_types],
+        "outputs": list(return_types),
         "output_names": output_names,
         "confidence": "static_exact",
     }

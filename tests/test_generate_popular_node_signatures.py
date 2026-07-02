@@ -1187,6 +1187,52 @@ NODE_CLASS_MAPPINGS = {
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
 
+    def test_input_types_with_non_string_input_name_skips_node(self):
+        source = '''
+class NonStringInputNameNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                1: ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "NonStringInputNameNode": NonStringInputNameNode,
+}
+'''
+        result = self._extract_source(source, "non-string-input-name-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_input_types_with_non_string_input_type_skips_node(self):
+        source = '''
+class NonStringInputTypeNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": (2,),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "NonStringInputTypeNode": NonStringInputTypeNode,
+}
+'''
+        result = self._extract_source(source, "non-string-input-type-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
     def test_dynamic_return_types_reassignment_skips_node(self):
         source = '''
 def build_outputs():
@@ -1872,6 +1918,53 @@ NODE_CLASS_MAPPINGS = {
 }
 '''
         result = self._extract_source(source, "string-return-names-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_non_string_return_type_entry_skips_node(self):
+        source = '''
+class NonStringReturnTypeNode:
+    RETURN_TYPES = (123,)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "NonStringReturnTypeNode": NonStringReturnTypeNode,
+}
+'''
+        result = self._extract_source(source, "non-string-return-type-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_non_string_return_name_entry_skips_node(self):
+        source = '''
+class NonStringReturnNameNode:
+    RETURN_TYPES = ("IMAGE",)
+    RETURN_NAMES = (456,)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "NonStringReturnNameNode": NonStringReturnNameNode,
+}
+'''
+        result = self._extract_source(source, "non-string-return-name-pack")
 
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
@@ -3024,6 +3117,55 @@ G = globals()
 G.update(NODE_CLASS_MAPPINGS={})
 '''
         result = self._extract_source(source, "global-alias-update-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_globals_dunder_setitem_invalidates_static_node_mapping(self):
+        source = '''
+class GlobalDunderSetitemNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "GlobalDunderSetitemNode": GlobalDunderSetitemNode,
+}
+globals().__setitem__("NODE_CLASS_MAPPINGS", {})
+'''
+        result = self._extract_source(source, "global-dunder-setitem-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_globals_alias_dunder_setitem_invalidates_static_node_mapping(self):
+        source = '''
+class GlobalAliasDunderSetitemNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "GlobalAliasDunderSetitemNode": GlobalAliasDunderSetitemNode,
+}
+ns = globals()
+ns.__setitem__("NODE_CLASS_MAPPINGS", {})
+'''
+        result = self._extract_source(source, "global-alias-dunder-setitem-pack")
 
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
