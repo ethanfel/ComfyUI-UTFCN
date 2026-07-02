@@ -2,7 +2,9 @@ import json
 import tempfile
 import textwrap
 import unittest
+from datetime import datetime, timezone
 from pathlib import Path
+from unittest import mock
 
 from tools.generate_popular_node_signatures import (
     extract_repo_signatures,
@@ -12,10 +14,6 @@ from tools.generate_popular_node_signatures import (
 
 
 class StaticExtractionTests(unittest.TestCase):
-    def _normalise_generated_at(self, text):
-        parsed = json.loads(text)
-        return text.replace(parsed["generated_at"], "<generated-at>")
-
     def _extract_source(self, source, pack_id="sample-pack"):
         with tempfile.TemporaryDirectory() as tmp:
             Path(tmp, "__init__.py").write_text(textwrap.dedent(source), encoding="utf-8")
@@ -4766,108 +4764,136 @@ NODE_CLASS_MAPPINGS = {
         self.assertEqual("no_static_nodes", result["pack"]["status"])
 
     def test_write_artifact_is_deterministic(self):
+        class FakeDateTime:
+            values = iter(
+                (
+                    datetime(2026, 1, 1, tzinfo=timezone.utc),
+                    datetime(2026, 1, 2, tzinfo=timezone.utc),
+                )
+            )
+
+            @classmethod
+            def now(cls, tz=None):
+                value = next(cls.values)
+                return value if tz is None else value.astimezone(tz)
+
         with tempfile.TemporaryDirectory() as tmp:
             out_one = Path(tmp, "one.json")
             out_two = Path(tmp, "two.json")
-            write_artifact(
-                out_one,
-                sources={
-                    "manager_url": "https://example.invalid/manager.json",
-                    "limit": 1,
-                    "registry": {"z": "last", "a": "first"},
-                },
-                packs={
-                    "b-pack": {
-                        "id": "b-pack",
-                        "title": "B Pack",
-                        "status": "ok",
-                        "metadata": {"z": 2, "a": 1},
+            with mock.patch("tools.generate_popular_node_signatures.datetime", FakeDateTime):
+                write_artifact(
+                    out_one,
+                    sources={
+                        "manager_url": "https://example.invalid/manager.json",
+                        "limit": 1,
+                        "registry": {"z": "last", "a": "first"},
                     },
-                    "a-pack": {
-                        "id": "a-pack",
-                        "title": "A Pack",
-                        "status": "ok",
-                        "metadata": {"z": 4, "a": 3},
+                    packs={
+                        "b-pack": {
+                            "id": "b-pack",
+                            "title": "B Pack",
+                            "status": "ok",
+                            "metadata": {"z": 2, "a": 1},
+                        },
+                        "a-pack": {
+                            "id": "a-pack",
+                            "title": "A Pack",
+                            "status": "ok",
+                            "metadata": {"z": 4, "a": 3},
+                        },
                     },
-                },
-                nodes={
-                    "BNode": {
-                        "type": "BNode",
-                        "display": "B Node",
-                        "pack": "b-pack",
-                        "repository": "https://github.com/example/b-pack",
-                        "inputs": {"zeta": "FLOAT", "alpha": "IMAGE"},
-                        "required": [],
-                        "outputs": ["IMAGE"],
-                        "output_names": ["image"],
-                        "confidence": "static_exact",
+                    nodes={
+                        "BNode": {
+                            "type": "BNode",
+                            "display": "B Node",
+                            "pack": "b-pack",
+                            "repository": "https://github.com/example/b-pack",
+                            "inputs": {"zeta": "FLOAT", "alpha": "IMAGE"},
+                            "required": [],
+                            "outputs": ["IMAGE"],
+                            "output_names": ["image"],
+                            "confidence": "static_exact",
+                        },
+                        "ANode": {
+                            "type": "ANode",
+                            "display": "A Node",
+                            "pack": "a-pack",
+                            "repository": "https://github.com/example/a-pack",
+                            "inputs": {"zeta": "FLOAT", "alpha": "IMAGE"},
+                            "required": [],
+                            "outputs": ["IMAGE"],
+                            "output_names": ["image"],
+                            "confidence": "static_exact",
+                        },
                     },
-                    "ANode": {
-                        "type": "ANode",
-                        "display": "A Node",
-                        "pack": "a-pack",
-                        "repository": "https://github.com/example/a-pack",
-                        "inputs": {"zeta": "FLOAT", "alpha": "IMAGE"},
-                        "required": [],
-                        "outputs": ["IMAGE"],
-                        "output_names": ["image"],
-                        "confidence": "static_exact",
+                )
+                write_artifact(
+                    out_two,
+                    sources={
+                        "registry": {"a": "first", "z": "last"},
+                        "limit": 1,
+                        "manager_url": "https://example.invalid/manager.json",
                     },
-                },
-            )
-            write_artifact(
-                out_two,
-                sources={
-                    "registry": {"a": "first", "z": "last"},
-                    "limit": 1,
-                    "manager_url": "https://example.invalid/manager.json",
-                },
-                packs={
-                    "a-pack": {
-                        "metadata": {"a": 3, "z": 4},
-                        "status": "ok",
-                        "title": "A Pack",
-                        "id": "a-pack",
+                    packs={
+                        "a-pack": {
+                            "metadata": {"a": 3, "z": 4},
+                            "status": "ok",
+                            "title": "A Pack",
+                            "id": "a-pack",
+                        },
+                        "b-pack": {
+                            "metadata": {"a": 1, "z": 2},
+                            "status": "ok",
+                            "title": "B Pack",
+                            "id": "b-pack",
+                        },
                     },
-                    "b-pack": {
-                        "metadata": {"a": 1, "z": 2},
-                        "status": "ok",
-                        "title": "B Pack",
-                        "id": "b-pack",
+                    nodes={
+                        "ANode": {
+                            "confidence": "static_exact",
+                            "output_names": ["image"],
+                            "outputs": ["IMAGE"],
+                            "required": [],
+                            "inputs": {"alpha": "IMAGE", "zeta": "FLOAT"},
+                            "repository": "https://github.com/example/a-pack",
+                            "pack": "a-pack",
+                            "display": "A Node",
+                            "type": "ANode",
+                        },
+                        "BNode": {
+                            "confidence": "static_exact",
+                            "output_names": ["image"],
+                            "outputs": ["IMAGE"],
+                            "required": [],
+                            "inputs": {"alpha": "IMAGE", "zeta": "FLOAT"},
+                            "repository": "https://github.com/example/b-pack",
+                            "pack": "b-pack",
+                            "display": "B Node",
+                            "type": "BNode",
+                        },
                     },
-                },
-                nodes={
-                    "ANode": {
-                        "confidence": "static_exact",
-                        "output_names": ["image"],
-                        "outputs": ["IMAGE"],
-                        "required": [],
-                        "inputs": {"alpha": "IMAGE", "zeta": "FLOAT"},
-                        "repository": "https://github.com/example/a-pack",
-                        "pack": "a-pack",
-                        "display": "A Node",
-                        "type": "ANode",
-                    },
-                    "BNode": {
-                        "confidence": "static_exact",
-                        "output_names": ["image"],
-                        "outputs": ["IMAGE"],
-                        "required": [],
-                        "inputs": {"alpha": "IMAGE", "zeta": "FLOAT"},
-                        "repository": "https://github.com/example/b-pack",
-                        "pack": "b-pack",
-                        "display": "B Node",
-                        "type": "BNode",
-                    },
-                },
-            )
+                )
             text_one = out_one.read_text(encoding="utf-8")
             text_two = out_two.read_text(encoding="utf-8")
             parsed = json.loads(text_one)
 
         self.assertEqual(["a-pack", "b-pack"], list(parsed["packs"]))
         self.assertEqual(["ANode", "BNode"], list(parsed["nodes"]))
-        self.assertEqual(self._normalise_generated_at(text_one), self._normalise_generated_at(text_two))
+        self.assertEqual(text_one, text_two)
+
+    def test_write_artifact_uses_explicit_generated_at(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp, "popular_node_signatures.json")
+            write_artifact(
+                out,
+                sources={"manager_url": "https://example.invalid/manager.json", "limit": 1},
+                packs={},
+                nodes={},
+                generated_at="2026-07-02T00:00:00Z",
+            )
+            parsed = json.loads(out.read_text(encoding="utf-8"))
+
+        self.assertEqual("2026-07-02T00:00:00Z", parsed["generated_at"])
 
 
 if __name__ == "__main__":

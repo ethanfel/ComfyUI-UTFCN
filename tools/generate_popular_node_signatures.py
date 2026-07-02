@@ -10,6 +10,7 @@ from pathlib import Path
 SCHEMA_VERSION = 1
 MANAGER_LIST_URL = "https://raw.githubusercontent.com/ltdrdata/ComfyUI-Manager/main/custom-node-list.json"
 REGISTRY_NODES_URL = "https://api.comfy.org/nodes"
+DEFAULT_GENERATED_AT = "1970-01-01T00:00:00Z"
 
 
 class UnsupportedStaticExpression(Exception):
@@ -2410,10 +2411,20 @@ def _sorted_json_value(value):
     return value
 
 
-def write_artifact(path, sources, packs, nodes):
+def _format_generated_at(generated_at):
+    if isinstance(generated_at, datetime):
+        if generated_at.tzinfo is None:
+            generated_at = generated_at.replace(tzinfo=timezone.utc)
+        else:
+            generated_at = generated_at.astimezone(timezone.utc)
+        return generated_at.replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    return str(generated_at)
+
+
+def write_artifact(path, sources, packs, nodes, *, generated_at=DEFAULT_GENERATED_AT):
     payload = {
         "schema_version": SCHEMA_VERSION,
-        "generated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+        "generated_at": _format_generated_at(generated_at),
         "sources": _sorted_json_value(sources),
         "packs": _sorted_json_value(packs),
         "nodes": _sorted_json_value(nodes),
