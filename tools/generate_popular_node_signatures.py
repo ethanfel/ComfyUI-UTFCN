@@ -251,22 +251,22 @@ def _metric_max(metrics, names):
     return max(values, default=0)
 
 
-def _metric_min_float(metrics, names):
+def _metric_max_float(metrics, names):
     values = []
     for name in names:
         value = _coerce_float(metrics.get(name))
         if value is not None:
             values.append(value)
-    return min(values) if values else None
+    return max(values) if values else None
 
 
-def _metric_min_float_from_sources(sources, names):
+def _metric_max_float_from_sources(sources, names):
     values = []
     for source in sources:
-        value = _metric_min_float(source, names)
+        value = _metric_max_float(source, names)
         if value is not None:
             values.append(value)
-    return min(values) if values else None
+    return max(values) if values else None
 
 
 def _pack_id_from_repository(repository):
@@ -312,7 +312,7 @@ def _rank_sort_key(pack):
     metric_sources = (pack.get("metrics", {}), pack)
     downloads = max(_metric_max(source, ("downloads", "download_count")) for source in metric_sources)
     stars = max(_metric_max(source, ("stars", "github_stars", "stargazers_count")) for source in metric_sources)
-    search_ranking = _metric_min_float_from_sources(
+    search_ranking = _metric_max_float_from_sources(
         metric_sources,
         ("search_ranking", "search_rank", "search_order"),
     )
@@ -321,7 +321,7 @@ def _rank_sort_key(pack):
         -downloads,
         -stars,
         1 if search_ranking is None else 0,
-        search_ranking if search_ranking is not None else 0.0,
+        -search_ranking if search_ranking is not None else 0.0,
         manager_order,
         str(pack.get("title", "")).lower(),
         str(pack.get("id", "")),

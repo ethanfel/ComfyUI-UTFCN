@@ -5684,6 +5684,32 @@ class ManagerIngestionTests(unittest.TestCase):
         self.assertEqual(["second", "first", "third"], [entry["id"] for entry in ranked])
         self.assertEqual([1, 2, 3], [entry["rank"] for entry in ranked])
 
+    def test_rank_packs_prefers_higher_search_ranking_when_downloads_and_stars_tie(self):
+        packs = [
+            {
+                "id": "low-search",
+                "title": "Low Search",
+                "repository": "https://github.com/example/low-search",
+                "downloads": 100,
+                "github_stars": 5,
+                "metrics": {"search_ranking": 1},
+                "manager_order": 0,
+            },
+            {
+                "id": "high-search",
+                "title": "High Search",
+                "repository": "https://github.com/example/high-search",
+                "downloads": 100,
+                "github_stars": 5,
+                "search_ranking": 10,
+                "manager_order": 1,
+            },
+        ]
+
+        ranked = rank_packs(packs)
+
+        self.assertEqual(["high-search", "low-search"], [pack["id"] for pack in ranked])
+
 
 class RepoCacheTests(unittest.TestCase):
     def test_default_cache_dir_is_under_system_temp_dir(self):
