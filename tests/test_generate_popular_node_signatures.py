@@ -3773,6 +3773,57 @@ globals().get("GlobalsGetReturnTypesNode").RETURN_TYPES.clear()
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
 
+    def test_namespace_alias_class_return_types_mutation_after_mapping_skips_node(self):
+        source = '''
+class NamespaceAliasReturnTypesNode:
+    RETURN_TYPES = ["IMAGE"]
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "NamespaceAliasReturnTypesNode": NamespaceAliasReturnTypesNode,
+}
+ns = globals()
+ns["NamespaceAliasReturnTypesNode"].RETURN_TYPES.clear()
+'''
+        result = self._extract_source(source, "namespace-alias-return-types-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_namespace_alias_get_class_alias_patch_after_mapping_skips_node(self):
+        source = '''
+class NamespaceAliasGetPatchedNode:
+    RETURN_TYPES = ["IMAGE"]
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "NamespaceAliasGetPatchedNode": NamespaceAliasGetPatchedNode,
+}
+ns = globals()
+Alias = ns.get("NamespaceAliasGetPatchedNode")
+Alias.RETURN_TYPES.clear()
+'''
+        result = self._extract_source(source, "namespace-alias-get-patched-node-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
     def test_getattr_class_attribute_alias_mutation_after_mapping_skips_node(self):
         source = '''
 class GetattrAttributeAliasNode:
