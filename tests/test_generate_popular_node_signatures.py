@@ -590,6 +590,33 @@ NODE_CLASS_MAPPINGS = {
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
 
+    def test_rhs_mutating_call_invalidates_static_env_value(self):
+        source = '''
+INPUTS = {
+    "required": {
+        "image": ("IMAGE",),
+    },
+}
+X = INPUTS.clear()
+
+
+class RhsMutatedInputEnvNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return INPUTS
+
+
+NODE_CLASS_MAPPINGS = {
+    "RhsMutatedInputEnvNode": RhsMutatedInputEnvNode,
+}
+'''
+        result = self._extract_source(source, "rhs-mutated-input-env-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
     def test_nested_mutable_env_literal_skips_static_node(self):
         source = '''
 REQ = {
@@ -780,6 +807,30 @@ NODE_CLASS_MAPPINGS = {
 }
 '''
         result = self._extract_source(source, "mutated-return-types-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_rhs_mutating_call_to_return_types_skips_node(self):
+        source = '''
+class RhsMutatedReturnTypesNode:
+    RETURN_TYPES = ["IMAGE"]
+    X = RETURN_TYPES.pop()
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "RhsMutatedReturnTypesNode": RhsMutatedReturnTypesNode,
+}
+'''
+        result = self._extract_source(source, "rhs-mutated-return-types-pack")
 
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
@@ -1240,6 +1291,30 @@ NODE_CLASS_MAPPINGS = {
 NODE_CLASS_MAPPINGS.clear()
 '''
         result = self._extract_source(source, "mutated-mapping-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_rhs_mutating_call_to_node_mapping_skips_node(self):
+        source = '''
+class RhsMutatedMappingNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "RhsMutatedMappingNode": RhsMutatedMappingNode,
+}
+X = NODE_CLASS_MAPPINGS.clear()
+'''
+        result = self._extract_source(source, "rhs-mutated-mapping-pack")
 
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
