@@ -585,6 +585,70 @@ class DynamicDupNode:
             "namespace-alias-dunder-setitem-replacement-duplicate-node-pack",
         )
 
+    def test_dynamic_node_class_mapping_assignment_suppresses_static_duplicate_safety(self):
+        source_a = '''
+class StaticDupNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "DupNode": StaticDupNode,
+}
+'''
+        source_b = '''
+def build_mappings():
+    return {"DupNode": object}
+
+
+NODE_CLASS_MAPPINGS = build_mappings()
+'''
+        result = self._extract_two_sources(
+            source_a,
+            source_b,
+            "dynamic-assignment-duplicate-safety-pack",
+        )
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_wildcard_import_suppresses_static_duplicate_safety(self):
+        source_a = '''
+class StaticDupNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "DupNode": StaticDupNode,
+}
+'''
+        source_b = '''
+from dynamic_nodes import *
+'''
+        result = self._extract_two_sources(
+            source_a,
+            source_b,
+            "wildcard-import-duplicate-safety-pack",
+        )
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
     def test_unsupported_reassignment_invalidates_static_env_value(self):
         source = '''
 def build_inputs():

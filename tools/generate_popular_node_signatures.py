@@ -2273,7 +2273,7 @@ def _node_class_mapping_mutation_string_keys(stmt, env, aliases=None, namespace_
 
 def _node_class_mapping_keys(tree):
     if _has_module_wildcard_import(tree):
-        return set()
+        return _INVALID
     keys = set()
     env = {}
     class_bindings = {}
@@ -2281,6 +2281,8 @@ def _node_class_mapping_keys(tree):
     namespace_aliases = set()
     for stmt in tree.body:
         if isinstance(stmt, ast.Assign) and _name_is_assigned(stmt, "NODE_CLASS_MAPPINGS"):
+            if not isinstance(stmt.value, ast.Dict):
+                return _INVALID
             literal_keys, literal_ambiguous = _literal_module_dict_string_keys_state(stmt.value, env)
             keys.update(literal_keys)
             if literal_ambiguous:
@@ -2290,6 +2292,8 @@ def _node_class_mapping_keys(tree):
             and _name_is_assigned(stmt, "NODE_CLASS_MAPPINGS")
             and stmt.value is not None
         ):
+            if not isinstance(stmt.value, ast.Dict):
+                return _INVALID
             literal_keys, literal_ambiguous = _literal_module_dict_string_keys_state(stmt.value, env)
             keys.update(literal_keys)
             if literal_ambiguous:
