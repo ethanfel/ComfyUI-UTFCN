@@ -3408,6 +3408,31 @@ G["NODE_CLASS_MAPPINGS"] = {}
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
 
+    def test_globals_chained_alias_subscript_assignment_invalidates_static_node_mapping(self):
+        source = '''
+class GlobalChainedAliasSubscriptAssignmentNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "GlobalChainedAliasSubscriptAssignmentNode": GlobalChainedAliasSubscriptAssignmentNode,
+}
+G = H = globals()
+H["NODE_CLASS_MAPPINGS"] = {}
+'''
+        result = self._extract_source(source, "global-chained-alias-subscript-assignment-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
     def test_globals_alias_update_invalidates_static_node_mapping(self):
         source = '''
 class GlobalAliasUpdateNode:
@@ -3429,6 +3454,31 @@ G = globals()
 G.update(NODE_CLASS_MAPPINGS={})
 '''
         result = self._extract_source(source, "global-alias-update-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_globals_alias_get_mutation_invalidates_static_node_mapping(self):
+        source = '''
+class GlobalAliasGetMutationNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "GlobalAliasGetMutationNode": GlobalAliasGetMutationNode,
+}
+G = globals()
+G.get("NODE_CLASS_MAPPINGS").clear()
+'''
+        result = self._extract_source(source, "global-alias-get-mutation-pack")
 
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
@@ -3577,6 +3627,32 @@ ALIAS = globals().get("NODE_CLASS_MAPPINGS")
 ALIAS.clear()
 '''
         result = self._extract_source(source, "global-get-alias-mutated-mapping-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_globals_alias_get_alias_mutation_invalidates_static_node_mapping(self):
+        source = '''
+class GlobalAliasGetAliasMutatedMappingNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "GlobalAliasGetAliasMutatedMappingNode": GlobalAliasGetAliasMutatedMappingNode,
+}
+G = globals()
+ALIAS = G.get("NODE_CLASS_MAPPINGS")
+ALIAS.clear()
+'''
+        result = self._extract_source(source, "global-alias-get-alias-mutated-mapping-pack")
 
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])

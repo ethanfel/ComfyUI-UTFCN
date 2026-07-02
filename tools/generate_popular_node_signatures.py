@@ -1633,7 +1633,7 @@ def _module_class_attribute_invalidated_names(stmt, class_aliases, class_attribu
     return names
 
 
-def _module_dict_alias_sources(value, name, aliases):
+def _module_dict_alias_sources(value, name, aliases, namespace_aliases=None):
     if isinstance(value, ast.Name):
         if value.id == name:
             return {name}
@@ -1641,21 +1641,27 @@ def _module_dict_alias_sources(value, name, aliases):
     if isinstance(value, (ast.Tuple, ast.List)):
         sources = set()
         for item in value.elts:
-            sources.update(_module_dict_alias_sources(item, name, aliases))
+            sources.update(_module_dict_alias_sources(item, name, aliases, namespace_aliases))
         return sources
 
     namespace_name = _namespace_subscript_name(value) or _namespace_lookup_name(value)
+    if namespace_aliases is not None:
+        namespace_name = (
+            namespace_name
+            or _namespace_alias_subscript_name(value, namespace_aliases)
+            or _namespace_alias_lookup_name(value, namespace_aliases)
+        )
     if namespace_name == name:
         return {name}
     return set()
 
 
-def _update_module_dict_alias_from_unpack(target, value, name, aliases):
+def _update_module_dict_alias_from_unpack(target, value, name, aliases, namespace_aliases):
     for target_item, value_item in _unpack_target_value_pairs(target, value):
         target_name = _alias_target_name(target_item)
         if target_name is None:
             continue
-        sources = _module_dict_alias_sources(value_item, name, aliases)
+        sources = _module_dict_alias_sources(value_item, name, aliases, namespace_aliases)
         if sources:
             aliases[target_name] = sources
 
@@ -1688,6 +1694,20 @@ def _namespace_alias_subscript_name(node, aliases):
         return None
     if isinstance(node.slice, ast.Constant) and isinstance(node.slice.value, str):
         return node.slice.value
+    return None
+
+
+def _namespace_alias_lookup_name(node, aliases):
+    if not isinstance(node, ast.Call):
+        return None
+    if not isinstance(node.func, ast.Attribute) or node.func.attr != "get":
+        return None
+    if not isinstance(node.func.value, ast.Name) or node.func.value.id not in aliases:
+        return None
+    if not node.args:
+        return None
+    if isinstance(node.args[0], ast.Constant) and isinstance(node.args[0].value, str):
+        return node.args[0].value
     return None
 
 
@@ -1778,7 +1798,10 @@ def _namespace_alias_mutation_target_names(stmt, aliases):
                             names.add(_DYNAMIC_NAMESPACE_MUTATION)
                     elif node.func.attr in _MUTATING_METHODS:
                         names.add(_DYNAMIC_NAMESPACE_MUTATION)
-                namespace_name = _namespace_alias_subscript_name(node.func.value, aliases)
+                namespace_name = _namespace_alias_subscript_name(
+                    node.func.value,
+                    aliases,
+                ) or _namespace_alias_lookup_name(node.func.value, aliases)
                 if namespace_name is not None and node.func.attr in _MUTATING_METHODS:
                     names.add(namespace_name)
             self.generic_visit(node)
@@ -1803,6 +1826,12 @@ def _update_namespace_aliases(stmt, aliases):
     if isinstance(stmt, ast.Assign) and len(stmt.targets) == 1 and isinstance(stmt.targets[0], ast.Name):
         if _namespace_alias_sources(stmt.value, aliases):
             aliases.add(stmt.targets[0].id)
+    elif isinstance(stmt, ast.Assign) and len(stmt.targets) > 1:
+        if _namespace_alias_sources(stmt.value, aliases):
+            for target in stmt.targets:
+                target_name = _alias_target_name(target)
+                if target_name is not None:
+                    aliases.add(target_name)
     elif isinstance(stmt, ast.Assign) and len(stmt.targets) == 1:
         for target_item, value_item in _unpack_target_value_pairs(stmt.targets[0], stmt.value):
             target_name = _alias_target_name(target_item)
@@ -1813,19 +1842,19 @@ def _update_namespace_aliases(stmt, aliases):
             aliases.add(stmt.target.id)
 
 
-def _update_module_dict_aliases(stmt, name, aliases):
+def _update_module_dict_aliases(stmt, name, aliases, namespace_aliases):
     rebound_names = _assignment_target_names(stmt) | _delete_target_names(stmt) | _bound_names(stmt)
     for rebound_name in rebound_names:
         aliases.pop(rebound_name, None)
 
     if isinstance(stmt, ast.Assign) and len(stmt.targets) == 1 and isinstance(stmt.targets[0], ast.Name):
-        sources = _module_dict_alias_sources(stmt.value, name, aliases)
+        sources = _module_dict_alias_sources(stmt.value, name, aliases, namespace_aliases)
         if sources:
             aliases[stmt.targets[0].id] = sources
     elif isinstance(stmt, ast.Assign) and len(stmt.targets) == 1:
-        _update_module_dict_alias_from_unpack(stmt.targets[0], stmt.value, name, aliases)
+        _update_module_dict_alias_from_unpack(stmt.targets[0], stmt.value, name, aliases, namespace_aliases)
     elif isinstance(stmt, ast.AnnAssign) and isinstance(stmt.target, ast.Name) and stmt.value is not None:
-        sources = _module_dict_alias_sources(stmt.value, name, aliases)
+        sources = _module_dict_alias_sources(stmt.value, name, aliases, namespace_aliases)
         if sources:
             aliases[stmt.target.id] = sources
 
@@ -1849,7 +1878,7 @@ def _final_module_dict(tree, name, value_converter, value_invalidated_by_names=N
         _apply_module_stmt_to_env(stmt, env, class_bindings)
         _update_class_aliases(stmt, class_aliases, class_bindings)
         _update_class_attribute_aliases(stmt, class_attribute_aliases, class_aliases, class_bindings)
-        _update_module_dict_aliases(stmt, name, module_dict_aliases)
+        _update_module_dict_aliases(stmt, name, module_dict_aliases, namespace_aliases)
         _update_namespace_aliases(stmt, namespace_aliases)
 
     for stmt in tree.body:
