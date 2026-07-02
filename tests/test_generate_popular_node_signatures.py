@@ -1081,6 +1081,39 @@ NODE_CLASS_MAPPINGS = {
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
 
+    def test_shadowed_classmethod_decorator_skips_node(self):
+        source = '''
+def classmethod(fn):
+    def replacement(cls):
+        return {
+            "required": {
+                "mask": ("MASK",),
+            },
+        }
+    return replacement
+
+
+class ShadowedClassmethodInputTypesNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "ShadowedClassmethodInputTypesNode": ShadowedClassmethodInputTypesNode,
+}
+'''
+        result = self._extract_source(source, "shadowed-classmethod-input-types-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
     def test_input_types_with_present_non_dict_sections_skips_node(self):
         source = '''
 class InvalidInputSectionsNode:
@@ -1860,6 +1893,30 @@ PatchedReturnTypesNode.RETURN_TYPES = ("MASK",)
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
 
+    def test_module_class_setattr_patch_after_mapping_skips_node(self):
+        source = '''
+class SetattrPatchedNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "SetattrPatchedNode": SetattrPatchedNode,
+}
+setattr(SetattrPatchedNode, "RETURN_TYPES", ("MASK",))
+'''
+        result = self._extract_source(source, "setattr-patched-node-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
     def test_module_class_input_types_patch_after_mapping_skips_node(self):
         source = '''
 def build_inputs():
@@ -2266,7 +2323,7 @@ NODE_CLASS_MAPPINGS = {
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
 
-    def test_dynamic_display_mapping_reassignment_falls_back_to_node_type(self):
+    def test_dynamic_display_mapping_reassignment_skips_node(self):
         source = '''
 def build_displays():
     return {"DisplayInvalidatedNode": "Dynamic Display"}
@@ -2294,8 +2351,8 @@ NODE_DISPLAY_NAME_MAPPINGS = build_displays()
 '''
         result = self._extract_source(source, "dynamic-display-pack")
 
-        self.assertEqual("DisplayInvalidatedNode", result["nodes"]["DisplayInvalidatedNode"]["display"])
-        self.assertEqual("ok", result["pack"]["status"])
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
 
     def test_input_types_with_dynamic_control_flow_is_skipped(self):
         source = '''
