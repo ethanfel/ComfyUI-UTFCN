@@ -605,6 +605,16 @@ def _invalidate_class_bindings(class_bindings, names):
         class_bindings.pop(name, None)
 
 
+def _is_trivially_safe_class_def(stmt):
+    return (
+        isinstance(stmt, ast.ClassDef)
+        and not stmt.decorator_list
+        and not stmt.bases
+        and not stmt.keywords
+        and not getattr(stmt, "type_params", ())
+    )
+
+
 def _apply_module_stmt_to_env(stmt, env, class_bindings=None):
     names = _mutating_call_target_names(stmt)
     if _DYNAMIC_NAMESPACE_MUTATION in names:
@@ -616,10 +626,10 @@ def _apply_module_stmt_to_env(stmt, env, class_bindings=None):
         _invalidate_env_names(env, names)
     if isinstance(stmt, ast.ClassDef):
         if class_bindings is not None:
-            if stmt.decorator_list:
-                class_bindings.pop(stmt.name, None)
-            else:
+            if _is_trivially_safe_class_def(stmt):
                 class_bindings[stmt.name] = (stmt, dict(env))
+            else:
+                class_bindings.pop(stmt.name, None)
         _invalidate_env_name(env, stmt.name)
         return
     if isinstance(stmt, ast.Assign):
@@ -999,7 +1009,7 @@ def _update_class_aliases(stmt, class_aliases, class_bindings):
         class_aliases.pop(name, None)
 
     if isinstance(stmt, ast.ClassDef):
-        if stmt.name in class_bindings and not stmt.decorator_list:
+        if stmt.name in class_bindings and _is_trivially_safe_class_def(stmt):
             class_aliases[stmt.name] = {stmt.name}
         return
 

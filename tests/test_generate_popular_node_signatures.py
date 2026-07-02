@@ -1889,6 +1889,63 @@ NODE_CLASS_MAPPINGS = {
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
 
+    def test_class_with_base_mapping_skips_node(self):
+        source = '''
+class Base:
+    def __init_subclass__(cls):
+        cls.RETURN_TYPES = ("MASK",)
+
+
+class HookedNode(Base):
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "HookedNode": HookedNode,
+}
+'''
+        result = self._extract_source(source, "hooked-base-class-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_class_with_metaclass_mapping_skips_node(self):
+        source = '''
+class Meta(type):
+    def __new__(mcls, name, bases, attrs):
+        attrs["RETURN_TYPES"] = ("MASK",)
+        return super().__new__(mcls, name, bases, attrs)
+
+
+class MetaNode(metaclass=Meta):
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "MetaNode": MetaNode,
+}
+'''
+        result = self._extract_source(source, "metaclass-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
     def test_node_mapping_key_uses_assignment_time_env(self):
         source = '''
 KEY = "Original"
