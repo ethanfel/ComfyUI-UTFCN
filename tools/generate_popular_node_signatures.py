@@ -181,17 +181,33 @@ def _mutating_call_target_names(stmt):
     names = set()
 
     class MutatingCallVisitor(ast.NodeVisitor):
+        def _visit_function_definition_expressions(self, node):
+            for decorator in node.decorator_list:
+                self.visit(decorator)
+            self.visit(node.args)
+            if node.returns is not None:
+                self.visit(node.returns)
+            for type_param in getattr(node, "type_params", ()):
+                self.visit(type_param)
+
         def visit_FunctionDef(self, node):
-            return None
+            self._visit_function_definition_expressions(node)
 
         def visit_AsyncFunctionDef(self, node):
-            return None
+            self._visit_function_definition_expressions(node)
 
         def visit_ClassDef(self, node):
-            return None
+            for decorator in node.decorator_list:
+                self.visit(decorator)
+            for base in node.bases:
+                self.visit(base)
+            for keyword in node.keywords:
+                self.visit(keyword.value)
+            for type_param in getattr(node, "type_params", ()):
+                self.visit(type_param)
 
         def visit_Lambda(self, node):
-            return None
+            self.visit(node.args)
 
         def visit_Call(self, node):
             if isinstance(node.func, ast.Attribute) and node.func.attr in _MUTATING_METHODS:

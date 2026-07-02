@@ -617,6 +617,73 @@ NODE_CLASS_MAPPINGS = {
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
 
+    def test_function_default_mutation_invalidates_static_env_value(self):
+        source = '''
+INPUTS = {
+    "required": {
+        "image": ("IMAGE",),
+    },
+}
+
+
+def helper(x=INPUTS.clear()):
+    pass
+
+
+class DefaultMutatedInputEnvNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return INPUTS
+
+
+NODE_CLASS_MAPPINGS = {
+    "DefaultMutatedInputEnvNode": DefaultMutatedInputEnvNode,
+}
+'''
+        result = self._extract_source(source, "default-mutated-input-env-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_function_decorator_mutation_invalidates_static_env_value(self):
+        source = '''
+def decorator(value):
+    def wrap(fn):
+        return fn
+    return wrap
+
+
+INPUTS = {
+    "required": {
+        "image": ("IMAGE",),
+    },
+}
+
+
+@decorator(INPUTS.clear())
+def helper():
+    pass
+
+
+class DecoratorMutatedInputEnvNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return INPUTS
+
+
+NODE_CLASS_MAPPINGS = {
+    "DecoratorMutatedInputEnvNode": DecoratorMutatedInputEnvNode,
+}
+'''
+        result = self._extract_source(source, "decorator-mutated-input-env-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
     def test_nested_mutable_env_literal_skips_static_node(self):
         source = '''
 REQ = {
@@ -831,6 +898,32 @@ NODE_CLASS_MAPPINGS = {
 }
 '''
         result = self._extract_source(source, "rhs-mutated-return-types-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_function_default_mutation_to_return_types_skips_node(self):
+        source = '''
+class DefaultMutatedReturnTypesNode:
+    RETURN_TYPES = ["IMAGE"]
+
+    def helper(self, x=RETURN_TYPES.clear()):
+        pass
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "DefaultMutatedReturnTypesNode": DefaultMutatedReturnTypesNode,
+}
+'''
+        result = self._extract_source(source, "default-mutated-return-types-pack")
 
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
