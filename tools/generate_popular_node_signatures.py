@@ -668,7 +668,13 @@ def _has_arbitrary_call(stmt):
 
     class ArbitraryCallPresenceVisitor(ast.NodeVisitor):
         def _visit_function_definition_expressions(self, node):
+            nonlocal found
             for decorator in node.decorator_list:
+                if not (
+                    isinstance(decorator, ast.Name)
+                    and decorator.id == "classmethod"
+                ):
+                    found = True
                 self.visit(decorator)
             self.visit(node.args)
             if node.returns is not None:

@@ -1359,6 +1359,36 @@ NODE_CLASS_MAPPINGS = {
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
 
+    def test_class_body_plain_function_decorator_invalidates_static_input_env(self):
+        source = '''
+INPUTS = {
+    "required": {
+        "image": ("IMAGE",),
+    },
+}
+
+
+class ClassPlainDecoratorInputEnvNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @decorator
+    def helper(self):
+        pass
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return INPUTS
+
+
+NODE_CLASS_MAPPINGS = {
+    "ClassPlainDecoratorInputEnvNode": ClassPlainDecoratorInputEnvNode,
+}
+'''
+        result = self._extract_source(source, "class-plain-decorator-input-env-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
     def test_class_body_function_body_mutation_does_not_invalidate_static_input_env(self):
         source = '''
 INPUTS = {
@@ -4116,6 +4146,33 @@ def helper(x=DefinitionTimeMutatedMappedNode.RETURN_TYPES.clear()):
     pass
 '''
         result = self._extract_source(source, "definition-time-mutated-mapped-node-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_plain_decorated_function_after_mapping_skips_node(self):
+        source = '''
+class PlainDecoratedAfterMappingNode:
+    RETURN_TYPES = ["IMAGE"]
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "PlainDecoratedAfterMappingNode": PlainDecoratedAfterMappingNode,
+}
+
+@decorator
+def helper():
+    pass
+'''
+        result = self._extract_source(source, "plain-decorated-after-mapping-pack")
 
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
