@@ -1439,6 +1439,31 @@ NODE_CLASS_MAPPINGS = {
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
 
+    def test_return_types_starred_collection_alias_mutation_skips_node(self):
+        source = '''
+class StarredCollectionAliasMutatedReturnTypesNode:
+    RETURN_TYPES = ["IMAGE"]
+    *ALIASES, = (RETURN_TYPES,)
+    ALIASES[0].clear()
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "StarredCollectionAliasMutatedReturnTypesNode": StarredCollectionAliasMutatedReturnTypesNode,
+}
+'''
+        result = self._extract_source(source, "starred-collection-alias-mutated-return-types-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
     def test_return_types_alias_subscript_assignment_skips_node(self):
         source = '''
 class AliasSubscriptMutatedReturnTypesNode:
@@ -2302,6 +2327,31 @@ Alias.RETURN_TYPES = ("MASK",)
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
 
+    def test_module_class_starred_collection_alias_patch_after_mapping_skips_node(self):
+        source = '''
+class StarredCollectionAliasPatchedNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "StarredCollectionAliasPatchedNode": StarredCollectionAliasPatchedNode,
+}
+*ALIASES, = (StarredCollectionAliasPatchedNode,)
+ALIASES[0].RETURN_TYPES = ("MASK",)
+'''
+        result = self._extract_source(source, "starred-collection-alias-patched-node-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
     def test_module_class_globals_subscript_alias_patch_after_mapping_skips_node(self):
         source = '''
 class GlobalsSubscriptAliasPatchedNode:
@@ -2476,6 +2526,32 @@ NODE_CLASS_MAPPINGS = {
 }
 '''
         result = self._extract_source(source, "starred-attribute-alias-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_module_class_attribute_starred_collection_alias_mutation_skips_node(self):
+        source = '''
+class StarredCollectionAttributeAliasNode:
+    RETURN_TYPES = ["IMAGE"]
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+*ALIASES, = (StarredCollectionAttributeAliasNode.RETURN_TYPES,)
+ALIASES[0].clear()
+
+NODE_CLASS_MAPPINGS = {
+    "StarredCollectionAttributeAliasNode": StarredCollectionAttributeAliasNode,
+}
+'''
+        result = self._extract_source(source, "starred-collection-attribute-alias-pack")
 
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
@@ -2996,6 +3072,31 @@ ALIAS, *REST = (NODE_CLASS_MAPPINGS, {}, {})
 ALIAS.clear()
 '''
         result = self._extract_source(source, "starred-unpacked-alias-mutated-mapping-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_starred_collection_alias_mutation_invalidates_static_node_mapping(self):
+        source = '''
+class StarredCollectionAliasMutatedMappingNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "StarredCollectionAliasMutatedMappingNode": StarredCollectionAliasMutatedMappingNode,
+}
+*ALIASES, = (NODE_CLASS_MAPPINGS,)
+ALIASES[0].clear()
+'''
+        result = self._extract_source(source, "starred-collection-alias-mutated-mapping-pack")
 
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
