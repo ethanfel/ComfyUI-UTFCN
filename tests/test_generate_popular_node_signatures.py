@@ -209,6 +209,57 @@ NODE_CLASS_MAPPINGS = {
         self.assertIn("GoodUtf8Node", result["nodes"])
         self.assertEqual("ok", result["pack"]["status"])
 
+    def test_duplicate_node_ids_across_files_are_skipped(self):
+        source_a = '''
+class FirstDupNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "DupNode": FirstDupNode,
+}
+'''
+        source_b = '''
+class SecondDupNode:
+    RETURN_TYPES = ("MASK",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "DupNode": SecondDupNode,
+}
+'''
+        with tempfile.TemporaryDirectory() as tmp:
+            Path(tmp, "a.py").write_text(textwrap.dedent(source_a), encoding="utf-8")
+            Path(tmp, "b.py").write_text(textwrap.dedent(source_b), encoding="utf-8")
+            result = extract_repo_signatures(
+                Path(tmp),
+                {
+                    "id": "duplicate-node-pack",
+                    "title": "Duplicate Node Pack",
+                    "repository": "https://github.com/example/duplicate-node-pack",
+                    "rank": 1,
+                },
+            )
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
     def test_unsupported_reassignment_invalidates_static_env_value(self):
         source = '''
 def build_inputs():
@@ -3387,6 +3438,57 @@ NODE_CLASS_MAPPINGS = {
 }
 '''
         result = self._extract_source(source, "dynamic-branch-input-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_input_types_observed_by_arbitrary_call_skips_node(self):
+        source = '''
+class ObservedInputTypesNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+    observe(INPUT_TYPES)
+
+
+NODE_CLASS_MAPPINGS = {
+    "ObservedInputTypesNode": ObservedInputTypesNode,
+}
+'''
+        result = self._extract_source(source, "observed-input-types-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_input_types_alias_observed_by_arbitrary_call_skips_node(self):
+        source = '''
+class AliasObservedInputTypesNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+    ALIAS = INPUT_TYPES
+    observe(ALIAS)
+
+
+NODE_CLASS_MAPPINGS = {
+    "AliasObservedInputTypesNode": AliasObservedInputTypesNode,
+}
+'''
+        result = self._extract_source(source, "alias-observed-input-types-pack")
 
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
