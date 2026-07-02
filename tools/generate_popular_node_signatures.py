@@ -169,20 +169,42 @@ def _repository_candidates(item):
             yield candidate
 
 
-def _manager_entry_repository(item):
-    install_type = str(item.get("install_type") or item.get("installType") or "").lower()
-    candidates = list(_repository_candidates(item))
-    if "git" in install_type:
-        for candidate in candidates:
-            repository = _normalise_repository_url(candidate)
-            if repository:
-                return repository
-        return None
+def _file_candidates(item):
+    files = item.get("files")
+    if isinstance(files, str):
+        yield files
+    elif isinstance(files, list):
+        for candidate in files:
+            yield candidate
+
+
+def _fallback_repository_candidates(item):
+    for key in ("repository", "repo", "git", "git_url", "url", "reference"):
+        value = item.get(key)
+        if isinstance(value, str):
+            yield value
+        elif isinstance(value, list):
+            for candidate in value:
+                yield candidate
+
+
+def _first_normalised_repository(candidates):
     for candidate in candidates:
         repository = _normalise_repository_url(candidate)
         if repository:
             return repository
     return None
+
+
+def _manager_entry_repository(item):
+    install_type = str(item.get("install_type") or item.get("installType") or "").lower()
+    if "git" in install_type:
+        return _first_normalised_repository(_file_candidates(item)) or _first_normalised_repository(
+            _fallback_repository_candidates(item)
+        )
+    if install_type:
+        return None
+    return _first_normalised_repository(_repository_candidates(item))
 
 
 def _entry_metrics(item):

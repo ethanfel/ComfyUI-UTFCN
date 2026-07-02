@@ -5563,6 +5563,39 @@ class ManagerIngestionTests(unittest.TestCase):
         self.assertEqual(42, entries[0]["metrics"]["downloads"])
         self.assertEqual("https://github.com/example/reference-nodes.git", entries[1]["repository"])
 
+    def test_normalise_manager_entries_prefers_git_install_files_over_reference(self):
+        manager_data = {
+            "custom_nodes": [
+                {
+                    "id": "stale-reference",
+                    "title": "Stale Reference",
+                    "reference": "https://github.com/example/stale-or-docs",
+                    "files": ["https://github.com/example/actual-install-repo"],
+                    "install_type": "git-clone",
+                },
+            ]
+        }
+
+        entries = normalise_manager_entries(manager_data)
+
+        self.assertEqual(1, len(entries))
+        self.assertEqual("https://github.com/example/actual-install-repo", entries[0]["repository"])
+
+    def test_normalise_manager_entries_skips_copy_installs_even_with_github_reference(self):
+        manager_data = {
+            "custom_nodes": [
+                {
+                    "id": "copy-only",
+                    "title": "Copy Only",
+                    "reference": "https://github.com/example/copy-only-docs",
+                    "files": ["https://raw.githubusercontent.com/example/copy-only/main/node.py"],
+                    "install_type": "copy",
+                },
+            ]
+        }
+
+        self.assertEqual([], normalise_manager_entries(manager_data))
+
     def test_rank_packs_uses_popularity_metrics_then_stable_fallbacks(self):
         packs = [
             {
