@@ -999,6 +999,45 @@ NODE_CLASS_MAPPINGS = {
         self.assertEqual({"image": "IMAGE"}, result["nodes"]["RuntimeBodyMutatedInputEnvNode"]["inputs"])
         self.assertEqual("ok", result["pack"]["status"])
 
+    def test_class_body_global_assignment_invalidates_static_input_env(self):
+        source = '''
+INPUTS = {
+    "required": {
+        "image": ("IMAGE",),
+    },
+}
+
+
+def build_inputs():
+    return {
+        "required": {
+            "mask": ("MASK",),
+        },
+    }
+
+
+class MutatesModuleAtDefinition:
+    global INPUTS
+    INPUTS = build_inputs()
+
+
+class ClassGlobalMutatedInputEnvNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return INPUTS
+
+
+NODE_CLASS_MAPPINGS = {
+    "ClassGlobalMutatedInputEnvNode": ClassGlobalMutatedInputEnvNode,
+}
+'''
+        result = self._extract_source(source, "class-global-mutated-input-env-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
     def test_nested_mutable_env_literal_skips_static_node(self):
         source = '''
 REQ = {
@@ -1299,6 +1338,32 @@ NODE_CLASS_MAPPINGS = {
 }
 '''
         result = self._extract_source(source, "invalid-input-sections-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_input_types_with_duplicate_required_optional_name_skips_node(self):
+        source = '''
+class DuplicateInputNameNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "x": ("IMAGE",),
+            },
+            "optional": {
+                "x": ("MASK",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "DuplicateInputNameNode": DuplicateInputNameNode,
+}
+'''
+        result = self._extract_source(source, "duplicate-input-name-pack")
 
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
