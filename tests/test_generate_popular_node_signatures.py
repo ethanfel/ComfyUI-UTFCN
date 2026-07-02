@@ -2978,6 +2978,56 @@ globals().update(NODE_CLASS_MAPPINGS={})
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
 
+    def test_globals_alias_subscript_assignment_invalidates_static_node_mapping(self):
+        source = '''
+class GlobalAliasSubscriptAssignmentNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "GlobalAliasSubscriptAssignmentNode": GlobalAliasSubscriptAssignmentNode,
+}
+G = globals()
+G["NODE_CLASS_MAPPINGS"] = {}
+'''
+        result = self._extract_source(source, "global-alias-subscript-assignment-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_globals_alias_update_invalidates_static_node_mapping(self):
+        source = '''
+class GlobalAliasUpdateNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "GlobalAliasUpdateNode": GlobalAliasUpdateNode,
+}
+G = globals()
+G.update(NODE_CLASS_MAPPINGS={})
+'''
+        result = self._extract_source(source, "global-alias-update-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
     def test_arbitrary_call_invalidates_static_node_mapping(self):
         source = '''
 class ArbitraryCallMappingNode:
@@ -3489,6 +3539,52 @@ NODE_CLASS_MAPPINGS = {
 }
 '''
         result = self._extract_source(source, "alias-observed-input-types-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_input_types_default_observed_by_arbitrary_call_skips_node(self):
+        source = '''
+class DefaultObservedInputTypesNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls, value=observe(INPUT_TYPES)):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "DefaultObservedInputTypesNode": DefaultObservedInputTypesNode,
+}
+'''
+        result = self._extract_source(source, "default-observed-input-types-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_input_types_return_annotation_observed_by_arbitrary_call_skips_node(self):
+        source = '''
+class AnnotationObservedInputTypesNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls) -> observe(INPUT_TYPES):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "AnnotationObservedInputTypesNode": AnnotationObservedInputTypesNode,
+}
+'''
+        result = self._extract_source(source, "annotation-observed-input-types-pack")
 
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
