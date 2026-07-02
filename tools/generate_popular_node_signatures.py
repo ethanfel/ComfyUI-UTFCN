@@ -2298,6 +2298,8 @@ def _node_class_mapping_keys(tree):
             keys.update(literal_keys)
             if literal_ambiguous:
                 return _INVALID
+        if _module_dict_alias_invalidated(stmt, module_dict_aliases):
+            return _INVALID
         mutation_keys = _node_class_mapping_mutation_string_keys(
             stmt,
             env,

@@ -476,6 +476,50 @@ alias = NODE_CLASS_MAPPINGS
             "multi-target-alias-duplicate-node-pack",
         )
 
+    def test_duplicate_node_id_from_starred_collection_mapping_alias_skips_static_node(self):
+        source_a = '''
+class StaticDupNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "DupNode": StaticDupNode,
+}
+'''
+        source_b = '''
+class DynamicDupNode:
+    RETURN_TYPES = ("MASK",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "mask": ("MASK",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {}
+*ALIASES, = (NODE_CLASS_MAPPINGS,)
+ALIASES[0]["DupNode"] = DynamicDupNode
+'''
+        result = self._extract_two_sources(
+            source_a,
+            source_b,
+            "starred-collection-alias-duplicate-node-pack",
+        )
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
     def test_ambiguous_mapping_mutation_key_suppresses_static_nodes(self):
         source_a = '''
 class StaticDupNode:
