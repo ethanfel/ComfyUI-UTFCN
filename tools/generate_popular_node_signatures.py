@@ -273,6 +273,16 @@ def _has_wildcard_import_in_control_flow(stmt):
     return found
 
 
+def _has_module_wildcard_import(tree):
+    for stmt in tree.body:
+        if _has_wildcard_import(stmt):
+            return True
+        if isinstance(stmt, (ast.If, ast.For, ast.AsyncFor, ast.While, ast.Try, ast.With, ast.AsyncWith, ast.Match)):
+            if _has_wildcard_import_in_control_flow(stmt):
+                return True
+    return False
+
+
 def _collect_module_env(tree):
     env = {}
     for stmt in tree.body:
@@ -509,6 +519,8 @@ def _final_module_dict(tree, env, name, value_converter):
 
 
 def _node_class_mappings(tree, env):
+    if _has_module_wildcard_import(tree):
+        return {}
     mappings = _final_module_dict(tree, env, "NODE_CLASS_MAPPINGS", _mapping_value_name)
     return {str(node_type): class_name for node_type, class_name in mappings.items() if node_type and class_name}
 

@@ -816,6 +816,57 @@ if True:
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
 
+    def test_wildcard_import_before_mapping_skips_static_node_mapping(self):
+        source = '''
+class WildcardBeforeMappingNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+from something import *
+
+NODE_CLASS_MAPPINGS = {
+    "WildcardBeforeMappingNode": WildcardBeforeMappingNode,
+}
+'''
+        result = self._extract_source(source, "wildcard-before-mapping-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_nested_wildcard_import_before_mapping_skips_static_node_mapping(self):
+        source = '''
+class NestedWildcardBeforeMappingNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+if True:
+    from something import *
+
+NODE_CLASS_MAPPINGS = {
+    "NestedWildcardBeforeMappingNode": NestedWildcardBeforeMappingNode,
+}
+'''
+        result = self._extract_source(source, "nested-wildcard-before-mapping-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
     def test_dynamic_display_mapping_reassignment_falls_back_to_node_type(self):
         source = '''
 def build_displays():
