@@ -205,6 +205,8 @@ def _mutating_call_target_names(stmt):
                 self.visit(keyword.value)
             for type_param in getattr(node, "type_params", ()):
                 self.visit(type_param)
+            for child in node.body:
+                self.visit(child)
 
         def visit_Lambda(self, node):
             self.visit(node.args)

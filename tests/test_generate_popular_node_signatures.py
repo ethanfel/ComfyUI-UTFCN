@@ -684,6 +684,101 @@ NODE_CLASS_MAPPINGS = {
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
 
+    def test_class_body_function_default_mutation_invalidates_static_input_env(self):
+        source = '''
+INPUTS = {
+    "required": {
+        "image": ("IMAGE",),
+    },
+}
+
+
+class ClassDefaultMutatedInputEnvNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    def helper(x=INPUTS.clear()):
+        pass
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return INPUTS
+
+
+NODE_CLASS_MAPPINGS = {
+    "ClassDefaultMutatedInputEnvNode": ClassDefaultMutatedInputEnvNode,
+}
+'''
+        result = self._extract_source(source, "class-default-mutated-input-env-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_class_body_function_decorator_mutation_invalidates_static_input_env(self):
+        source = '''
+def decorator(value):
+    def wrap(fn):
+        return fn
+    return wrap
+
+
+INPUTS = {
+    "required": {
+        "image": ("IMAGE",),
+    },
+}
+
+
+class ClassDecoratorMutatedInputEnvNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @decorator(INPUTS.clear())
+    def helper(self):
+        pass
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return INPUTS
+
+
+NODE_CLASS_MAPPINGS = {
+    "ClassDecoratorMutatedInputEnvNode": ClassDecoratorMutatedInputEnvNode,
+}
+'''
+        result = self._extract_source(source, "class-decorator-mutated-input-env-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_class_body_function_body_mutation_does_not_invalidate_static_input_env(self):
+        source = '''
+INPUTS = {
+    "required": {
+        "image": ("IMAGE",),
+    },
+}
+
+
+class RuntimeBodyMutatedInputEnvNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    def helper(self):
+        INPUTS.clear()
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return INPUTS
+
+
+NODE_CLASS_MAPPINGS = {
+    "RuntimeBodyMutatedInputEnvNode": RuntimeBodyMutatedInputEnvNode,
+}
+'''
+        result = self._extract_source(source, "runtime-body-mutated-input-env-pack")
+
+        self.assertIn("RuntimeBodyMutatedInputEnvNode", result["nodes"])
+        self.assertEqual({"image": "IMAGE"}, result["nodes"]["RuntimeBodyMutatedInputEnvNode"]["inputs"])
+        self.assertEqual("ok", result["pack"]["status"])
+
     def test_nested_mutable_env_literal_skips_static_node(self):
         source = '''
 REQ = {
