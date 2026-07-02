@@ -523,6 +523,68 @@ NODE_CLASS_MAPPINGS[get_id()] = DynamicDupNode
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
 
+    def _assert_namespace_mapping_replacement_duplicate_skips_static_node(self, replacement, pack_id):
+        source_a = '''
+class StaticDupNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "DupNode": StaticDupNode,
+}
+'''
+        source_b = f'''
+class DynamicDupNode:
+    RETURN_TYPES = ("MASK",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {{
+            "required": {{
+                "mask": ("MASK",),
+            }},
+        }}
+
+
+{replacement}
+'''
+        result = self._extract_two_sources(source_a, source_b, pack_id)
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_duplicate_node_id_from_globals_update_mapping_replacement_skips_static_node(self):
+        self._assert_namespace_mapping_replacement_duplicate_skips_static_node(
+            'globals().update(NODE_CLASS_MAPPINGS={"DupNode": DynamicDupNode})',
+            "globals-update-replacement-duplicate-node-pack",
+        )
+
+    def test_duplicate_node_id_from_globals_dunder_setitem_mapping_replacement_skips_static_node(self):
+        self._assert_namespace_mapping_replacement_duplicate_skips_static_node(
+            'globals().__setitem__("NODE_CLASS_MAPPINGS", {"DupNode": DynamicDupNode})',
+            "globals-dunder-setitem-replacement-duplicate-node-pack",
+        )
+
+    def test_duplicate_node_id_from_namespace_alias_update_mapping_replacement_skips_static_node(self):
+        self._assert_namespace_mapping_replacement_duplicate_skips_static_node(
+            'ns = globals()\nns.update(NODE_CLASS_MAPPINGS={"DupNode": DynamicDupNode})',
+            "namespace-alias-update-replacement-duplicate-node-pack",
+        )
+
+    def test_duplicate_node_id_from_namespace_alias_dunder_setitem_mapping_replacement_skips_static_node(self):
+        self._assert_namespace_mapping_replacement_duplicate_skips_static_node(
+            'ns = globals()\nns.__setitem__("NODE_CLASS_MAPPINGS", {"DupNode": DynamicDupNode})',
+            "namespace-alias-dunder-setitem-replacement-duplicate-node-pack",
+        )
+
     def test_unsupported_reassignment_invalidates_static_env_value(self):
         source = '''
 def build_inputs():

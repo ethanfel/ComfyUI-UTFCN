@@ -1856,6 +1856,7 @@ def _namespace_alias_mutation_target_names(stmt, aliases):
                 names.update(_namespace_alias_target_names(target, aliases))
 
         def visit_Call(self, node):
+            names.update(_namespace_mutating_call_target_names(node))
             if isinstance(node.func, ast.Attribute):
                 if isinstance(node.func.value, ast.Name) and node.func.value.id in aliases:
                     if node.func.attr in _NAMESPACE_DUNDER_MUTATORS:
@@ -2302,6 +2303,9 @@ def _node_class_mapping_keys(tree):
         if mutation_keys is _INVALID:
             return _INVALID
         keys.update(mutation_keys)
+        namespace_mutations = _namespace_alias_mutation_target_names(stmt, namespace_aliases)
+        if _name_invalidated_by("NODE_CLASS_MAPPINGS", namespace_mutations):
+            return _INVALID
         _apply_module_stmt_to_env(stmt, env, class_bindings)
         _update_module_dict_aliases(
             stmt,
