@@ -119,6 +119,23 @@ class GeneratedSignatureLoaderTests(unittest.TestCase):
         self.assertEqual({}, generated["meta"])
         self.assertEqual({}, dict(generated["by_out"]))
 
+    def test_repository_artifact_loads_when_present(self):
+        repo_dir = Path(__file__).resolve().parents[1]
+        generated = utfcn_core.load_generated_signatures(str(repo_dir))
+
+        node_type = "RGB_HexToHSV //Inspire"
+        self.assertEqual({"rgb_hex": "STRING"}, generated["sigs"][node_type]["inputs"])
+        self.assertEqual({"rgb_hex"}, generated["sigs"][node_type]["required"])
+        self.assertEqual(["FLOAT", "FLOAT", "FLOAT"], generated["sigs"][node_type]["outputs"])
+        self.assertEqual(["hue", "saturation", "value"], generated["sigs"][node_type]["output_names"])
+        self.assertEqual("inspire", generated["meta"][node_type]["pack"])
+        self.assertEqual("RGB Hex To HSV (Inspire)", generated["meta"][node_type]["display"])
+        self.assertEqual(
+            "https://github.com/ltdrdata/ComfyUI-Inspire-Pack",
+            generated["meta"][node_type]["repository"],
+        )
+        self.assertEqual([node_type], generated["by_out"]["FLOAT"])
+
 
 class GeneratedSignatureMatchingTests(unittest.TestCase):
     def _ctx(self, rules=None, generated=None):

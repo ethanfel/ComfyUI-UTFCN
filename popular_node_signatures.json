@@ -1,0 +1,137 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-07-02T21:19:24Z",
+  "sources": {
+    "limit": 10,
+    "manager_url": "https://raw.githubusercontent.com/ltdrdata/ComfyUI-Manager/main/custom-node-list.json",
+    "normalised_packs": 5143,
+    "processed_packs": 10
+  },
+  "packs": {
+    "comfyui-impact-pack": {
+      "author": "Dr.Lt.Data",
+      "description": "This node pack offers various detector nodes and detailer nodes that allow you to configure a workflow that automatically enhances facial details. And provide iterative upscaler.\nNOTE: To use the UltralyticsDetectorProvider, you must install the 'ComfyUI Impact Subpack' separately.",
+      "id": "comfyui-impact-pack",
+      "node_count": 0,
+      "rank": 4,
+      "repository": "https://github.com/ltdrdata/ComfyUI-Impact-Pack",
+      "status": "no_static_nodes",
+      "title": "ComfyUI Impact Pack"
+    },
+    "comfyui-impact-subpack": {
+      "author": "Dr.Lt.Data",
+      "description": "This node pack provides nodes that complement the Impact Pack, such as the UltralyticsDetectorProvider.",
+      "id": "comfyui-impact-subpack",
+      "node_count": 0,
+      "rank": 5,
+      "repository": "https://github.com/ltdrdata/ComfyUI-Impact-Subpack",
+      "status": "no_static_nodes",
+      "title": "ComfyUI Impact Subpack"
+    },
+    "comfyui-persona-director": {
+      "author": "18yz153",
+      "description": "A visual state machine for consistent character generation. It intelligently maintains character identity, outfits, and locations across multiple generations using LLM-driven state management.",
+      "id": "comfyui-persona-director",
+      "node_count": 0,
+      "rank": 2,
+      "repository": "https://github.com/18yz153/ComfyUI-Persona-Director",
+      "status": "no_static_nodes",
+      "title": "ComfyUI-Persona-Director"
+    },
+    "comfyui-simplefloatslider": {
+      "author": "Carasibana",
+      "description": "ComfyUI custom nodes providing styled draggable float slider widgets",
+      "id": "comfyui-simplefloatslider",
+      "node_count": 0,
+      "rank": 1,
+      "repository": "https://github.com/Carasibana/ComfyUI-SimpleFloatSlider",
+      "status": "no_static_nodes",
+      "title": "ComfyUI-SimpleFloatSlider"
+    },
+    "connection-helper": {
+      "author": "Dr.Lt.Data",
+      "description": "This is a helper extension for ComfyUI that assists with node connections.",
+      "id": "connection-helper",
+      "node_count": 0,
+      "rank": 7,
+      "repository": "https://github.com/ltdrdata/comfyui-connection-helper",
+      "status": "no_static_nodes",
+      "title": "ComfyUI Connection Helper"
+    },
+    "inspire": {
+      "author": "Dr.Lt.Data",
+      "description": "This extension provides various nodes to support Lora Block Weight and the Impact Pack. Provides many easily applicable regional features and applications for Variation Seed.",
+      "id": "inspire",
+      "node_count": 1,
+      "rank": 6,
+      "repository": "https://github.com/ltdrdata/ComfyUI-Inspire-Pack",
+      "status": "ok",
+      "title": "ComfyUI Inspire Pack"
+    },
+    "manager": {
+      "author": "Dr.Lt.Data",
+      "description": "ComfyUI-Manager itself is also a custom node.",
+      "id": "manager",
+      "node_count": 0,
+      "rank": 3,
+      "repository": "https://github.com/ltdrdata/ComfyUI-Manager",
+      "status": "no_static_nodes",
+      "title": "ComfyUI-Manager"
+    },
+    "test-nodepack-don-t-install-this-1": {
+      "author": "Test.Data",
+      "description": "This is a test nodepack for safely testing the functionality of ComfyUI-Manager. Please do not install this nodepack.",
+      "id": "test-nodepack-don-t-install-this-1",
+      "node_count": 0,
+      "rank": 9,
+      "repository": "https://github.com/ltdrdata/nodepack-test1-do-not-install",
+      "status": "no_static_nodes",
+      "title": "TEST NODEPACK: DON'T INSTALL THIS #1"
+    },
+    "test-nodepack-don-t-install-this-2": {
+      "author": "Test.Data",
+      "description": "This is a test nodepack for safely testing the functionality of ComfyUI-Manager. Please do not install this nodepack.",
+      "id": "test-nodepack-don-t-install-this-2",
+      "node_count": 0,
+      "rank": 10,
+      "repository": "https://github.com/ltdrdata/nodepack-test2-do-not-install",
+      "status": "no_static_nodes",
+      "title": "TEST NODEPACK: DON'T INSTALL THIS #2"
+    },
+    "was-ns": {
+      "author": "Dr.Lt.Data",
+      "description": "A massive node pack consisting of over 200 nodes, including image processing, masking, text handling, and arithmetic operations.\nNOTE: A replacement node pack provided for existing users following the retirement of the original author of the widely used WAS Node Suite.",
+      "id": "was-ns",
+      "node_count": 0,
+      "rank": 8,
+      "repository": "https://github.com/ltdrdata/was-node-suite-comfyui",
+      "status": "no_static_nodes",
+      "title": "WAS Node Suite (Revised)"
+    }
+  },
+  "nodes": {
+    "RGB_HexToHSV //Inspire": {
+      "confidence": "static_exact",
+      "display": "RGB Hex To HSV (Inspire)",
+      "inputs": {
+        "rgb_hex": "STRING"
+      },
+      "output_names": [
+        "hue",
+        "saturation",
+        "value"
+      ],
+      "outputs": [
+        "FLOAT",
+        "FLOAT",
+        "FLOAT"
+      ],
+      "pack": "inspire",
+      "repository": "https://github.com/ltdrdata/ComfyUI-Inspire-Pack",
+      "required": [
+        "rgb_hex"
+      ],
+      "type": "RGB_HexToHSV //Inspire"
+    }
+  }
+}
