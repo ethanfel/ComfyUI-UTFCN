@@ -981,12 +981,18 @@ def _module_dict_entries(node, env, class_bindings, value_converter):
 
 
 def _class_alias_sources(value, class_aliases, class_bindings):
-    if not isinstance(value, ast.Name):
+    if isinstance(value, ast.Name):
+        if value.id in class_aliases:
+            return set(class_aliases[value.id])
+        if value.id in class_bindings:
+            return {value.id}
         return set()
-    if value.id in class_aliases:
-        return set(class_aliases[value.id])
-    if value.id in class_bindings:
-        return {value.id}
+
+    name = _namespace_subscript_name(value) or _namespace_lookup_name(value)
+    if name in class_aliases:
+        return set(class_aliases[name])
+    if name in class_bindings:
+        return {name}
     return set()
 
 

@@ -2151,6 +2151,106 @@ Alias.RETURN_TYPES = ("MASK",)
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
 
+    def test_module_class_globals_subscript_alias_patch_after_mapping_skips_node(self):
+        source = '''
+class GlobalsSubscriptAliasPatchedNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "GlobalsSubscriptAliasPatchedNode": GlobalsSubscriptAliasPatchedNode,
+}
+Alias = globals()["GlobalsSubscriptAliasPatchedNode"]
+Alias.RETURN_TYPES = ("MASK",)
+'''
+        result = self._extract_source(source, "globals-subscript-alias-patched-node-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_module_class_globals_get_alias_patch_after_mapping_skips_node(self):
+        source = '''
+class GlobalsGetAliasPatchedNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "GlobalsGetAliasPatchedNode": GlobalsGetAliasPatchedNode,
+}
+Alias = globals().get("GlobalsGetAliasPatchedNode")
+Alias.RETURN_TYPES = ("MASK",)
+'''
+        result = self._extract_source(source, "globals-get-alias-patched-node-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_module_class_locals_subscript_alias_patch_after_mapping_skips_node(self):
+        source = '''
+class LocalsSubscriptAliasPatchedNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "LocalsSubscriptAliasPatchedNode": LocalsSubscriptAliasPatchedNode,
+}
+Alias = locals()["LocalsSubscriptAliasPatchedNode"]
+Alias.RETURN_TYPES = ("MASK",)
+'''
+        result = self._extract_source(source, "locals-subscript-alias-patched-node-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_module_class_vars_get_alias_patch_after_mapping_skips_node(self):
+        source = '''
+class VarsGetAliasPatchedNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "VarsGetAliasPatchedNode": VarsGetAliasPatchedNode,
+}
+Alias = vars().get("VarsGetAliasPatchedNode")
+Alias.RETURN_TYPES = ("MASK",)
+'''
+        result = self._extract_source(source, "vars-get-alias-patched-node-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
     def test_module_class_attribute_alias_mutation_before_mapping_skips_node(self):
         source = '''
 class PreMappingAttributeAliasNode:
