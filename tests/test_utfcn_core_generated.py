@@ -275,6 +275,39 @@ class GeneratedSignatureMatchingTests(unittest.TestCase):
         self.assertEqual("partial", result["SampleMaskInvert"][0]["tier"])
         self.assertFalse(result["SampleMaskInvert"][0]["verified"])
 
+    def test_generated_signature_with_different_input_name_falls_back_to_serialized_signature(self):
+        generated = _empty_generated()
+        generated["sigs"]["SampleMaskInvert"] = {
+            "inputs": {"mask": "MASK"},
+            "required": {"mask"},
+            "outputs": ["MASK"],
+            "output_names": ["mask"],
+        }
+        generated["meta"]["SampleMaskInvert"] = {
+            "source": "generated",
+            "pack": "sample-pack",
+            "display": "Sample Mask Invert",
+            "repository": "https://github.com/example/sample-pack",
+            "confidence": "static_exact",
+        }
+        generated["by_out"]["MASK"].append("SampleMaskInvert")
+
+        result = utfcn_core.match(
+            self._ctx(generated=generated),
+            [
+                {
+                    "type": "SampleMaskInvert",
+                    "inputs": {"masks": "MASK"},
+                    "outputs": ["MASK"],
+                    "output_names": ["mask"],
+                }
+            ],
+        )
+
+        self.assertEqual("CoreMaskInvert", result["SampleMaskInvert"][0]["to"])
+        self.assertEqual("partial", result["SampleMaskInvert"][0]["tier"])
+        self.assertFalse(result["SampleMaskInvert"][0]["verified"])
+
     def test_malformed_generated_context_falls_back_without_raising(self):
         result = utfcn_core.match(
             self._ctx(generated={"sigs": "bad", "meta": "bad"}),

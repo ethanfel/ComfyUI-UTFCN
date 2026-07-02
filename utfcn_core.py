@@ -414,12 +414,11 @@ def _generated_signature_conflicts(serialized_sig, generated_sig):
         return False
 
     generated_inputs = generated_sig["inputs"]
-    generated_input_types = set(generated_inputs.values())
     for name, typ in serialized_sig["inputs"].items():
         if name in generated_inputs:
             if generated_inputs[name] != typ:
                 return True
-        elif typ not in generated_input_types:
+        else:
             return True
 
     if Counter(serialized_sig["outputs"]) - Counter(generated_sig["outputs"]):
