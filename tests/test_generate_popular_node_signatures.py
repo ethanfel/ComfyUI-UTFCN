@@ -842,6 +842,82 @@ NODE_CLASS_MAPPINGS = build_mappings()
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
 
+    def test_rebound_node_class_name_skips_static_mapping(self):
+        source = '''
+def build_node():
+    return object()
+
+
+class ReboundNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+ReboundNode = build_node()
+
+NODE_CLASS_MAPPINGS = {
+    "ReboundNode": ReboundNode,
+}
+'''
+        result = self._extract_source(source, "rebound-node-class-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_conditional_class_mapping_skips_node(self):
+        source = '''
+if True:
+    class ConditionalNode:
+        RETURN_TYPES = ("IMAGE",)
+
+        @classmethod
+        def INPUT_TYPES(cls):
+            return {
+                "required": {
+                    "image": ("IMAGE",),
+                },
+            }
+
+
+NODE_CLASS_MAPPINGS = {
+    "ConditionalNode": ConditionalNode,
+}
+'''
+        result = self._extract_source(source, "conditional-node-class-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_top_level_class_mapping_still_extracts_node(self):
+        source = '''
+class TopLevelMappedNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "TopLevelMappedNode": TopLevelMappedNode,
+}
+'''
+        result = self._extract_source(source, "top-level-node-class-pack")
+
+        self.assertIn("TopLevelMappedNode", result["nodes"])
+        self.assertEqual("ok", result["pack"]["status"])
+
     def test_mutated_node_class_mapping_skips_node(self):
         source = '''
 class MutatedMappingNode:

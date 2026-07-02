@@ -283,13 +283,24 @@ def _has_module_wildcard_import(tree):
     return False
 
 
-def _collect_module_env(tree, class_envs=None):
+def _invalidate_class_bindings(class_bindings, names):
+    if class_bindings is None:
+        return
+    for name in names:
+        class_bindings.pop(name, None)
+
+
+def _collect_module_env(tree, class_bindings=None):
     env = {}
     for stmt in tree.body:
-        if class_envs is not None and isinstance(stmt, ast.ClassDef):
-            class_envs[stmt.name] = dict(env)
+        if isinstance(stmt, ast.ClassDef):
+            if class_bindings is not None:
+                class_bindings[stmt.name] = (stmt, dict(env))
+            env.pop(stmt.name, None)
+            continue
         if isinstance(stmt, ast.Assign):
             names = _assignment_target_names(stmt)
+            _invalidate_class_bindings(class_bindings, names)
             if len(stmt.targets) == 1 and isinstance(stmt.targets[0], ast.Name):
                 name = stmt.targets[0].id
                 if (
@@ -310,6 +321,7 @@ def _collect_module_env(tree, class_envs=None):
             continue
         if isinstance(stmt, ast.AnnAssign):
             names = _assignment_target_names(stmt)
+            _invalidate_class_bindings(class_bindings, names)
             if stmt.value is None:
                 continue
             if isinstance(stmt.target, ast.Name):
@@ -331,30 +343,46 @@ def _collect_module_env(tree, class_envs=None):
                     env.pop(name, None)
             continue
         if isinstance(stmt, ast.AugAssign):
-            for name in _assignment_target_names(stmt):
+            names = _assignment_target_names(stmt)
+            _invalidate_class_bindings(class_bindings, names)
+            for name in names:
                 env.pop(name, None)
             continue
         if isinstance(stmt, ast.Delete):
-            for name in _delete_target_names(stmt):
+            names = _delete_target_names(stmt)
+            _invalidate_class_bindings(class_bindings, names)
+            for name in names:
                 env.pop(name, None)
             continue
         if isinstance(stmt, ast.Expr):
-            for name in _mutating_call_target_names(stmt):
+            names = _mutating_call_target_names(stmt)
+            _invalidate_class_bindings(class_bindings, names)
+            for name in names:
                 env.pop(name, None)
-            for name in _bound_names(stmt):
+            names = _bound_names(stmt)
+            _invalidate_class_bindings(class_bindings, names)
+            for name in names:
                 env.pop(name, None)
             continue
         if isinstance(stmt, (ast.If, ast.For, ast.AsyncFor, ast.While, ast.Try, ast.With, ast.AsyncWith, ast.Match)):
             if _has_wildcard_import_in_control_flow(stmt):
                 env.clear()
+                if class_bindings is not None:
+                    class_bindings.clear()
                 continue
-            for name in _assigned_names_in_control_flow(stmt):
+            names = _assigned_names_in_control_flow(stmt)
+            _invalidate_class_bindings(class_bindings, names)
+            for name in names:
                 env.pop(name, None)
             continue
         if _has_wildcard_import(stmt):
             env.clear()
+            if class_bindings is not None:
+                class_bindings.clear()
             continue
-        for name in _bound_names(stmt):
+        names = _bound_names(stmt)
+        _invalidate_class_bindings(class_bindings, names)
+        for name in names:
             env.pop(name, None)
     return env
 
@@ -367,7 +395,7 @@ def normalise_input_spec(spec):
 
 
 def _class_defs(tree):
-    return {node.name: node for node in ast.walk(tree) if isinstance(node, ast.ClassDef)}
+    return {node.name: node for node in tree.body if isinstance(node, ast.ClassDef)}
 
 
 def _class_attr(cls, name, env):
@@ -602,16 +630,15 @@ def extract_repo_signatures(repo_dir, pack_meta):
         tree = _parse_python_file(path)
         if tree is None:
             continue
-        class_envs = {}
-        env = _collect_module_env(tree, class_envs)
+        class_bindings = {}
+        env = _collect_module_env(tree, class_bindings)
         mappings = _node_class_mappings(tree, env)
         displays = _display_mappings(tree, env)
-        classes = _class_defs(tree)
         for node_type, class_name in sorted(mappings.items()):
-            cls = classes.get(class_name)
-            if cls is None:
+            binding = class_bindings.get(class_name)
+            if binding is None:
                 continue
-            class_env = class_envs.get(class_name, env)
+            cls, class_env = binding
             sig = _signature_from_class(node_type, cls, displays.get(node_type), pack_meta, class_env)
             if sig is not None:
                 nodes[node_type] = sig
