@@ -191,13 +191,13 @@ def _input_types(cls, env):
     for stmt in cls.body:
         if not isinstance(stmt, ast.FunctionDef) or stmt.name != "INPUT_TYPES":
             continue
-        for child in stmt.body:
-            if isinstance(child, ast.Return):
-                try:
-                    value = _literal(child.value, env)
-                except UnsupportedStaticExpression:
-                    return None
-                return value if isinstance(value, dict) else None
+        if len(stmt.body) != 1 or not isinstance(stmt.body[0], ast.Return):
+            return None
+        try:
+            value = _literal(stmt.body[0].value, env)
+        except UnsupportedStaticExpression:
+            return None
+        return value if isinstance(value, dict) else None
     return None
 
 
@@ -209,46 +209,69 @@ def _mapping_value_name(value):
     return None
 
 
-def _node_class_mappings(tree, env):
+def _name_is_assigned(stmt, name):
+    return name in _assignment_target_names(stmt)
+
+
+def _module_dict_entries(node, env, value_converter):
+    if not isinstance(node, ast.Dict):
+        raise UnsupportedStaticExpression(type(node).__name__)
+    result = {}
+    for key, value in zip(node.keys, node.values):
+        if key is None:
+            raise UnsupportedStaticExpression("dict unpacking is not supported")
+        converted_value = value_converter(value)
+        if converted_value is None:
+            continue
+        result[_literal(key, env)] = converted_value
+    return result
+
+
+def _final_module_dict(tree, env, name, value_converter):
+    value = _MISSING
     for stmt in tree.body:
-        if not isinstance(stmt, ast.Assign):
-            continue
-        if not any(
-            isinstance(target, ast.Name) and target.id == "NODE_CLASS_MAPPINGS"
-            for target in stmt.targets
-        ):
-            continue
-        if not isinstance(stmt.value, ast.Dict):
-            continue
-        mappings = {}
-        for key, value in zip(stmt.value.keys, stmt.value.values):
-            try:
-                node_type = _literal(key, env)
-            except UnsupportedStaticExpression:
+        if isinstance(stmt, ast.Assign):
+            if not _name_is_assigned(stmt, name):
                 continue
-            class_name = _mapping_value_name(value)
-            if node_type and class_name:
-                mappings[str(node_type)] = class_name
-        return mappings
-    return {}
+            if len(stmt.targets) == 1 and isinstance(stmt.targets[0], ast.Name):
+                try:
+                    value = _module_dict_entries(stmt.value, env, value_converter)
+                except UnsupportedStaticExpression:
+                    value = _INVALID
+            else:
+                value = _INVALID
+            continue
+        if isinstance(stmt, ast.AnnAssign):
+            if not _name_is_assigned(stmt, name):
+                continue
+            if isinstance(stmt.target, ast.Name) and stmt.value is not None:
+                try:
+                    value = _module_dict_entries(stmt.value, env, value_converter)
+                except UnsupportedStaticExpression:
+                    value = _INVALID
+            else:
+                value = _INVALID
+            continue
+        if isinstance(stmt, ast.AugAssign):
+            if _name_is_assigned(stmt, name):
+                value = _INVALID
+            continue
+        if isinstance(stmt, (ast.If, ast.For, ast.AsyncFor, ast.While, ast.Try)):
+            if name in _assigned_names_in_control_flow(stmt):
+                value = _INVALID
+    if value in (_MISSING, _INVALID):
+        return {}
+    return value
+
+
+def _node_class_mappings(tree, env):
+    mappings = _final_module_dict(tree, env, "NODE_CLASS_MAPPINGS", _mapping_value_name)
+    return {str(node_type): class_name for node_type, class_name in mappings.items() if node_type and class_name}
 
 
 def _display_mappings(tree, env):
-    for stmt in tree.body:
-        if not isinstance(stmt, ast.Assign):
-            continue
-        if not any(
-            isinstance(target, ast.Name) and target.id == "NODE_DISPLAY_NAME_MAPPINGS"
-            for target in stmt.targets
-        ):
-            continue
-        try:
-            value = _literal(stmt.value, env)
-        except UnsupportedStaticExpression:
-            return {}
-        if isinstance(value, dict):
-            return {str(k): str(v) for k, v in value.items()}
-    return {}
+    displays = _final_module_dict(tree, env, "NODE_DISPLAY_NAME_MAPPINGS", lambda value: _literal(value, env))
+    return {str(k): str(v) for k, v in displays.items()}
 
 
 def _signature_from_class(node_type, cls, display, pack_meta, env):

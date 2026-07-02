@@ -364,6 +364,98 @@ NODE_CLASS_MAPPINGS = {
         self.assertEqual(["MASK"], result["nodes"]["FinalReturnTypesNode"]["outputs"])
         self.assertEqual("ok", result["pack"]["status"])
 
+    def test_dynamic_node_class_mapping_reassignment_skips_node(self):
+        source = '''
+def build_mappings():
+    return {"DynamicMappingNode": DynamicMappingNode}
+
+
+class DynamicMappingNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "DynamicMappingNode": DynamicMappingNode,
+}
+NODE_CLASS_MAPPINGS = build_mappings()
+'''
+        result = self._extract_source(source, "dynamic-mapping-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_dynamic_display_mapping_reassignment_falls_back_to_node_type(self):
+        source = '''
+def build_displays():
+    return {"DisplayInvalidatedNode": "Dynamic Display"}
+
+
+class DisplayInvalidatedNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "DisplayInvalidatedNode": DisplayInvalidatedNode,
+}
+NODE_DISPLAY_NAME_MAPPINGS = {
+    "DisplayInvalidatedNode": "Stale Display",
+}
+NODE_DISPLAY_NAME_MAPPINGS = build_displays()
+'''
+        result = self._extract_source(source, "dynamic-display-pack")
+
+        self.assertEqual("DisplayInvalidatedNode", result["nodes"]["DisplayInvalidatedNode"]["display"])
+        self.assertEqual("ok", result["pack"]["status"])
+
+    def test_input_types_with_dynamic_control_flow_is_skipped(self):
+        source = '''
+def something():
+    return True
+
+
+def dynamic_inputs():
+    return {"required": {"image": ("IMAGE",)}}
+
+
+class DynamicBranchInputNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        if something():
+            return dynamic_inputs()
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "DynamicBranchInputNode": DynamicBranchInputNode,
+}
+'''
+        result = self._extract_source(source, "dynamic-branch-input-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
     def test_write_artifact_is_deterministic(self):
         with tempfile.TemporaryDirectory() as tmp:
             out_one = Path(tmp, "one.json")
