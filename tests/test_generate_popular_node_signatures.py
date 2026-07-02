@@ -1960,6 +1960,80 @@ NODE_CLASS_MAPPINGS = {
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
 
+    def test_bare_return_types_reference_skips_node(self):
+        source = '''
+class BareReturnTypesReferenceNode:
+    RETURN_TYPES = ("IMAGE",)
+    RETURN_TYPES
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "BareReturnTypesReferenceNode": BareReturnTypesReferenceNode,
+}
+'''
+        result = self._extract_source(source, "bare-return-types-reference-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_bare_return_types_alias_reference_skips_node(self):
+        source = '''
+class BareReturnTypesAliasReferenceNode:
+    RETURN_TYPES = ("IMAGE",)
+    ALIAS = RETURN_TYPES
+    ALIAS
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "BareReturnTypesAliasReferenceNode": BareReturnTypesAliasReferenceNode,
+}
+'''
+        result = self._extract_source(source, "bare-return-types-alias-reference-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_bare_return_names_reference_skips_node(self):
+        source = '''
+class BareReturnNamesReferenceNode:
+    RETURN_TYPES = ("IMAGE",)
+    RETURN_NAMES = ("image",)
+    RETURN_NAMES
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "BareReturnNamesReferenceNode": BareReturnNamesReferenceNode,
+}
+'''
+        result = self._extract_source(source, "bare-return-names-reference-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
     def test_return_types_chained_alias_mutation_skips_node(self):
         source = '''
 class ChainedAliasMutatedReturnTypesNode:
@@ -4591,6 +4665,56 @@ NODE_CLASS_MAPPINGS = {
 }
 '''
         result = self._extract_source(source, "chained-alias-callee-input-types-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_bare_input_types_reference_skips_node(self):
+        source = '''
+class BareInputTypesReferenceNode:
+    RETURN_TYPES = ("IMAGE",)
+    INPUT_TYPES
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "BareInputTypesReferenceNode": BareInputTypesReferenceNode,
+}
+'''
+        result = self._extract_source(source, "bare-input-types-reference-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_bare_input_types_alias_reference_skips_node(self):
+        source = '''
+class BareInputTypesAliasReferenceNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+    ALIAS = INPUT_TYPES
+    ALIAS
+
+
+NODE_CLASS_MAPPINGS = {
+    "BareInputTypesAliasReferenceNode": BareInputTypesAliasReferenceNode,
+}
+'''
+        result = self._extract_source(source, "bare-input-types-alias-reference-pack")
 
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])

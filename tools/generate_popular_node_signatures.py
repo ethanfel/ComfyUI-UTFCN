@@ -677,6 +677,44 @@ def _definition_time_referenced_names(stmt):
     return names
 
 
+def _class_body_expression_referenced_names(stmt):
+    if not isinstance(stmt, ast.Expr):
+        return set()
+
+    names = set()
+
+    class ClassBodyExpressionReferenceVisitor(ast.NodeVisitor):
+        def visit_Call(self, child):
+            name = _namespace_lookup_name(child)
+            if name is not None:
+                names.add(name)
+            self.generic_visit(child)
+
+        def visit_Subscript(self, child):
+            name = _namespace_subscript_name(child)
+            if name is not None:
+                names.add(name)
+            self.generic_visit(child)
+
+        def visit_Lambda(self, child):
+            self.visit(child.args)
+
+        def visit_FunctionDef(self, child):
+            return None
+
+        def visit_AsyncFunctionDef(self, child):
+            return None
+
+        def visit_ClassDef(self, child):
+            return None
+
+        def visit_Name(self, child):
+            names.add(child.id)
+
+    ClassBodyExpressionReferenceVisitor().visit(stmt.value)
+    return names
+
+
 def _assigned_names_in_control_flow(stmt):
     names = _mutating_call_target_names(stmt) | _arbitrary_call_observed_names(stmt)
 
@@ -1182,6 +1220,7 @@ def _class_attr(cls, name, env):
     for stmt in cls.body:
         mutating_targets = _mutating_call_target_names(stmt)
         observed_targets = _arbitrary_call_observed_names(stmt)
+        expression_references = _class_body_expression_referenced_names(stmt)
         if aliases.intersection(mutating_targets):
             value = _INVALID
         if name in mutating_targets:
@@ -1189,6 +1228,10 @@ def _class_attr(cls, name, env):
         if aliases.intersection(observed_targets):
             value = _INVALID
         if name in observed_targets:
+            value = _INVALID
+        if aliases.intersection(expression_references):
+            value = _INVALID
+        if name in expression_references:
             value = _INVALID
         if isinstance(stmt, ast.Assign):
             target_names = _assignment_target_names(stmt)
@@ -1307,6 +1350,7 @@ def _class_attr(cls, name, env):
 
 def _input_types(cls, env, decorator_env):
     value = _MISSING
+    sticky_invalid = False
     aliases = set()
     classmethod_shadowed = "classmethod" in decorator_env
     namespace_mutations = _class_body_namespace_mutation_names(cls)
@@ -1316,6 +1360,7 @@ def _input_types(cls, env, decorator_env):
         mutating_targets = _mutating_call_target_names(stmt)
         observed_targets = _arbitrary_call_observed_names(stmt)
         definition_references = _definition_time_referenced_names(stmt)
+        expression_references = _class_body_expression_referenced_names(stmt)
         protected_definition_references = _CLASS_SIGNATURE_ATTRS | aliases
         input_types_invalidated = (
             "INPUT_TYPES" in mutating_targets
@@ -1323,27 +1368,37 @@ def _input_types(cls, env, decorator_env):
             or "INPUT_TYPES" in observed_targets
             or bool(aliases.intersection(observed_targets))
             or bool(definition_references.intersection(protected_definition_references))
+            or bool(expression_references.intersection(protected_definition_references))
         )
         if input_types_invalidated:
             value = _INVALID
+            sticky_invalid = True
         if isinstance(stmt, ast.FunctionDef) and stmt.name == "INPUT_TYPES":
-            if input_types_invalidated:
+            if input_types_invalidated or sticky_invalid:
                 continue
             if not _input_types_decorators_are_supported(stmt.decorator_list, classmethod_shadowed):
                 value = _INVALID
+                sticky_invalid = True
                 continue
             if len(stmt.body) != 1 or not isinstance(stmt.body[0], ast.Return):
                 value = _INVALID
+                sticky_invalid = True
                 continue
             try:
                 candidate = _literal(stmt.body[0].value, env)
             except UnsupportedStaticExpression:
                 value = _INVALID
+                sticky_invalid = True
                 continue
-            value = candidate if isinstance(candidate, dict) else _INVALID
+            if isinstance(candidate, dict):
+                value = candidate
+            else:
+                value = _INVALID
+                sticky_invalid = True
             continue
         if isinstance(stmt, ast.AsyncFunctionDef) and stmt.name == "INPUT_TYPES":
             value = _INVALID
+            sticky_invalid = True
             continue
         rebound_names = _assignment_target_names(stmt) | _delete_target_names(stmt) | _bound_names(stmt)
         aliases.difference_update(rebound_names)
