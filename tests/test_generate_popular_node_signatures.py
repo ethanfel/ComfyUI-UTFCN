@@ -39,6 +39,7 @@ class StaticExtractionTests(unittest.TestCase):
         self.assertEqual("COMBO", normalise_input_spec((["nearest", "bilinear"],)))
         self.assertEqual("IMAGE", normalise_input_spec(("IMAGE",)))
         self.assertEqual("FLOAT", normalise_input_spec(("FLOAT", {"default": 1.0})))
+        self.assertIsNone(normalise_input_spec("IMAGE"))
 
     def test_extracts_static_node_mapping_and_signatures(self):
         source = '''
@@ -340,6 +341,58 @@ NODE_CLASS_MAPPINGS = {
                     "id": "invalid-duplicate-node-pack",
                     "title": "Invalid Duplicate Node Pack",
                     "repository": "https://github.com/example/invalid-duplicate-node-pack",
+                    "rank": 1,
+                },
+            )
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_duplicate_node_id_from_mapping_update_skips_static_node(self):
+        source_a = '''
+class StaticDupNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "DupNode": StaticDupNode,
+}
+'''
+        source_b = '''
+class DynamicDupNode:
+    RETURN_TYPES = ("MASK",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "mask": ("MASK",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {}
+NODE_CLASS_MAPPINGS.update({
+    "DupNode": DynamicDupNode,
+})
+'''
+        with tempfile.TemporaryDirectory() as tmp:
+            Path(tmp, "a.py").write_text(textwrap.dedent(source_a), encoding="utf-8")
+            Path(tmp, "b.py").write_text(textwrap.dedent(source_b), encoding="utf-8")
+            result = extract_repo_signatures(
+                Path(tmp),
+                {
+                    "id": "update-duplicate-node-pack",
+                    "title": "Update Duplicate Node Pack",
+                    "repository": "https://github.com/example/update-duplicate-node-pack",
                     "rank": 1,
                 },
             )
@@ -1454,6 +1507,29 @@ NODE_CLASS_MAPPINGS = {
 }
 '''
         result = self._extract_source(source, "non-string-input-type-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_input_types_with_bare_string_input_spec_skips_node(self):
+        source = '''
+class BareStringInputSpecNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": "IMAGE",
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "BareStringInputSpecNode": BareStringInputSpecNode,
+}
+'''
+        result = self._extract_source(source, "bare-string-input-spec-pack")
 
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
