@@ -4939,6 +4939,33 @@ NODE_DISPLAY_NAME_MAPPINGS = {
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
 
+    def test_empty_display_mapping_value_is_preserved(self):
+        source = '''
+class EmptyDisplayNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "EmptyDisplayNode": EmptyDisplayNode,
+}
+NODE_DISPLAY_NAME_MAPPINGS = {
+    "EmptyDisplayNode": "",
+}
+'''
+        result = self._extract_source(source, "empty-display-pack")
+
+        self.assertIn("EmptyDisplayNode", result["nodes"])
+        self.assertEqual("", result["nodes"]["EmptyDisplayNode"]["display"])
+        self.assertEqual("ok", result["pack"]["status"])
+
     def test_non_string_display_mapping_value_skips_node(self):
         source = '''
 class NonStringDisplayValueNode:

@@ -2518,7 +2518,7 @@ def _signature_from_class(node_type, cls, display, pack_meta, class_env, input_e
 
     return {
         "type": node_type,
-        "display": display or node_type,
+        "display": display if display is not None else node_type,
         "pack": pack_meta["id"],
         "repository": pack_meta.get("repository", ""),
         "inputs": inputs,
