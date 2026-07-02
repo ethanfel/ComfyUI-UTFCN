@@ -443,6 +443,11 @@ def _apply_module_stmt_to_env(stmt, env, class_bindings=None):
         _invalidate_class_bindings(class_bindings, names)
         if len(stmt.targets) == 1 and isinstance(stmt.targets[0], ast.Name):
             name = stmt.targets[0].id
+            subscript_root = _mutable_env_subscript_root(stmt.value, env)
+            if subscript_root is not None:
+                env.pop(subscript_root, None)
+                env.pop(name, None)
+                return
             if (
                 isinstance(stmt.value, ast.Name)
                 and stmt.value.id in env
@@ -466,6 +471,11 @@ def _apply_module_stmt_to_env(stmt, env, class_bindings=None):
             return
         if isinstance(stmt.target, ast.Name):
             name = stmt.target.id
+            subscript_root = _mutable_env_subscript_root(stmt.value, env)
+            if subscript_root is not None:
+                env.pop(subscript_root, None)
+                env.pop(name, None)
+                return
             if (
                 isinstance(stmt.value, ast.Name)
                 and stmt.value.id in env
@@ -542,6 +552,19 @@ def _class_defs(tree):
 
 def _is_mutable_env_reference(node, env):
     return isinstance(node, ast.Name) and node.id in env and _is_mutable_static_value(env[node.id])
+
+
+def _mutable_env_subscript_root(node, env):
+    if not isinstance(node, ast.Subscript):
+        return None
+    name = _root_name(node)
+    if name in env and _is_mutable_static_value(env[name]):
+        return name
+    return None
+
+
+def _input_types_decorators_are_supported(decorators):
+    return all(isinstance(decorator, ast.Name) and decorator.id == "classmethod" for decorator in decorators)
 
 
 def _class_attr(cls, name, env):
@@ -657,6 +680,9 @@ def _input_types(cls, env):
         if "INPUT_TYPES" in _mutating_call_target_names(stmt):
             value = _INVALID
         if isinstance(stmt, ast.FunctionDef) and stmt.name == "INPUT_TYPES":
+            if not _input_types_decorators_are_supported(stmt.decorator_list):
+                value = _INVALID
+                continue
             if len(stmt.body) != 1 or not isinstance(stmt.body[0], ast.Return):
                 value = _INVALID
                 continue

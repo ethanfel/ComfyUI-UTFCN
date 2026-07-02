@@ -906,6 +906,34 @@ NODE_CLASS_MAPPINGS = {
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
 
+    def test_nested_mutable_env_subscript_alias_skips_static_node(self):
+        source = '''
+INPUTS = {
+    "required": {
+        "image": ("IMAGE",),
+    },
+}
+REQ = INPUTS["required"]
+REQ.clear()
+
+
+class NestedMutableEnvSubscriptAliasNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return INPUTS
+
+
+NODE_CLASS_MAPPINGS = {
+    "NestedMutableEnvSubscriptAliasNode": NestedMutableEnvSubscriptAliasNode,
+}
+'''
+        result = self._extract_source(source, "nested-mutable-env-subscript-alias-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
     def test_post_class_input_reassignment_skips_static_node(self):
         source = '''
 def build_inputs():
@@ -992,6 +1020,39 @@ NODE_CLASS_MAPPINGS = {
 }
 '''
         result = self._extract_source(source, "later-dynamic-input-types-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_decorated_input_types_skips_node(self):
+        source = '''
+def replace(fn):
+    def replacement(cls):
+        return {
+            "required": {
+                "mask": ("MASK",),
+            },
+        }
+    return replacement
+
+
+class DecoratedInputTypesNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @replace
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "DecoratedInputTypesNode": DecoratedInputTypesNode,
+}
+'''
+        result = self._extract_source(source, "decorated-input-types-pack")
 
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
