@@ -2058,10 +2058,15 @@ def _literal_module_dict_string_keys(node, env):
     return keys
 
 
-def _mapping_subscript_target_key(target, mapping_name, env):
+def _mapping_subscript_target_key(target, mapping_name, env, aliases=None, namespace_aliases=None):
     if not isinstance(target, ast.Subscript):
         return None
-    if _root_name(target.value) != mapping_name:
+    if not _module_dict_alias_sources(
+        target.value,
+        mapping_name,
+        aliases or {},
+        namespace_aliases or set(),
+    ):
         return None
     try:
         key_value = _literal(target.slice, env)
@@ -2070,8 +2075,10 @@ def _mapping_subscript_target_key(target, mapping_name, env):
     return key_value if isinstance(key_value, str) and key_value else None
 
 
-def _node_class_mapping_mutation_string_keys(stmt, env):
+def _node_class_mapping_mutation_string_keys(stmt, env, aliases=None, namespace_aliases=None):
     keys = set()
+    aliases = aliases or {}
+    namespace_aliases = namespace_aliases or set()
 
     class MappingMutationKeyVisitor(ast.NodeVisitor):
         def _visit_function_definition_expressions(self, node):
@@ -2103,26 +2110,52 @@ def _node_class_mapping_mutation_string_keys(stmt, env):
 
         def visit_Assign(self, node):
             for target in node.targets:
-                key = _mapping_subscript_target_key(target, "NODE_CLASS_MAPPINGS", env)
+                key = _mapping_subscript_target_key(
+                    target,
+                    "NODE_CLASS_MAPPINGS",
+                    env,
+                    aliases,
+                    namespace_aliases,
+                )
                 if key is not None:
                     keys.add(key)
             self.visit(node.value)
 
         def visit_AnnAssign(self, node):
-            key = _mapping_subscript_target_key(node.target, "NODE_CLASS_MAPPINGS", env)
+            key = _mapping_subscript_target_key(
+                node.target,
+                "NODE_CLASS_MAPPINGS",
+                env,
+                aliases,
+                namespace_aliases,
+            )
             if key is not None:
                 keys.add(key)
             if node.value is not None:
                 self.visit(node.value)
 
         def visit_AugAssign(self, node):
-            key = _mapping_subscript_target_key(node.target, "NODE_CLASS_MAPPINGS", env)
+            key = _mapping_subscript_target_key(
+                node.target,
+                "NODE_CLASS_MAPPINGS",
+                env,
+                aliases,
+                namespace_aliases,
+            )
             if key is not None:
                 keys.add(key)
             self.visit(node.value)
 
         def visit_Call(self, node):
-            if isinstance(node.func, ast.Attribute) and _root_name(node.func.value) == "NODE_CLASS_MAPPINGS":
+            if (
+                isinstance(node.func, ast.Attribute)
+                and _module_dict_alias_sources(
+                    node.func.value,
+                    "NODE_CLASS_MAPPINGS",
+                    aliases,
+                    namespace_aliases,
+                )
+            ):
                 if node.func.attr == "update":
                     for arg in node.args:
                         keys.update(_literal_module_dict_string_keys(arg, env))
@@ -2148,6 +2181,8 @@ def _node_class_mapping_keys(tree):
     keys = set()
     env = {}
     class_bindings = {}
+    module_dict_aliases = {}
+    namespace_aliases = set()
     for stmt in tree.body:
         if isinstance(stmt, ast.Assign) and _name_is_assigned(stmt, "NODE_CLASS_MAPPINGS"):
             keys.update(_literal_module_dict_string_keys(stmt.value, env))
@@ -2157,8 +2192,22 @@ def _node_class_mapping_keys(tree):
             and stmt.value is not None
         ):
             keys.update(_literal_module_dict_string_keys(stmt.value, env))
-        keys.update(_node_class_mapping_mutation_string_keys(stmt, env))
+        keys.update(
+            _node_class_mapping_mutation_string_keys(
+                stmt,
+                env,
+                module_dict_aliases,
+                namespace_aliases,
+            )
+        )
         _apply_module_stmt_to_env(stmt, env, class_bindings)
+        _update_module_dict_aliases(
+            stmt,
+            "NODE_CLASS_MAPPINGS",
+            module_dict_aliases,
+            namespace_aliases,
+        )
+        _update_namespace_aliases(stmt, namespace_aliases)
     return keys
 
 

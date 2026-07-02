@@ -29,6 +29,20 @@ class StaticExtractionTests(unittest.TestCase):
                 },
             )
 
+    def _extract_two_sources(self, source_a, source_b, pack_id):
+        with tempfile.TemporaryDirectory() as tmp:
+            Path(tmp, "a.py").write_text(textwrap.dedent(source_a), encoding="utf-8")
+            Path(tmp, "b.py").write_text(textwrap.dedent(source_b), encoding="utf-8")
+            return extract_repo_signatures(
+                Path(tmp),
+                {
+                    "id": pack_id,
+                    "title": "Sample Pack",
+                    "repository": f"https://github.com/example/{pack_id}",
+                    "rank": 1,
+                },
+            )
+
     def _skip_if_syntax_unsupported(self, source):
         try:
             compile(textwrap.dedent(source), "<test-source>", "exec")
@@ -399,6 +413,64 @@ NODE_CLASS_MAPPINGS.update({
 
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def _assert_duplicate_node_id_from_alias_mutation_skips_static_node(self, mutation, pack_id):
+        source_a = '''
+class StaticDupNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "DupNode": StaticDupNode,
+}
+'''
+        source_b = f'''
+class DynamicDupNode:
+    RETURN_TYPES = ("MASK",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {{
+            "required": {{
+                "mask": ("MASK",),
+            }},
+        }}
+
+
+NODE_CLASS_MAPPINGS = {{}}
+alias = NODE_CLASS_MAPPINGS
+{mutation}
+'''
+        result = self._extract_two_sources(source_a, source_b, pack_id)
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_duplicate_node_id_from_mapping_alias_subscript_skips_static_node(self):
+        self._assert_duplicate_node_id_from_alias_mutation_skips_static_node(
+            'alias["DupNode"] = DynamicDupNode',
+            "alias-subscript-duplicate-node-pack",
+        )
+
+    def test_duplicate_node_id_from_mapping_alias_update_skips_static_node(self):
+        self._assert_duplicate_node_id_from_alias_mutation_skips_static_node(
+            'alias.update({"DupNode": DynamicDupNode})',
+            "alias-update-duplicate-node-pack",
+        )
+
+    def test_duplicate_node_id_from_mapping_alias_setdefault_skips_static_node(self):
+        self._assert_duplicate_node_id_from_alias_mutation_skips_static_node(
+            'alias.setdefault("DupNode", DynamicDupNode)',
+            "alias-setdefault-duplicate-node-pack",
+        )
 
     def test_unsupported_reassignment_invalidates_static_env_value(self):
         source = '''
