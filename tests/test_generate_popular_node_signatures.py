@@ -1869,6 +1869,29 @@ KEY = "Wrong"
         self.assertEqual(["IMAGE"], result["nodes"]["Original"]["outputs"])
         self.assertEqual("ok", result["pack"]["status"])
 
+    def test_non_string_node_mapping_key_skips_node(self):
+        source = '''
+class NonStringMappingKeyNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    123: NonStringMappingKeyNode,
+}
+'''
+        result = self._extract_source(source, "non-string-mapping-key-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
     def test_module_class_return_types_patch_after_mapping_skips_node(self):
         source = '''
 class PatchedReturnTypesNode:

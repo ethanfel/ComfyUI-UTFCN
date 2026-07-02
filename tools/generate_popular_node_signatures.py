@@ -1060,7 +1060,9 @@ def _node_class_mappings(tree):
         _mapping_value_binding,
         _node_mapping_invalidated_by_names,
     )
-    return {str(node_type): binding for node_type, (_class_name, binding) in mappings.items() if node_type}
+    if not all(isinstance(node_type, str) for node_type in mappings):
+        return {}
+    return {node_type: binding for node_type, (_class_name, binding) in mappings.items() if node_type}
 
 
 def _display_mappings(tree):
