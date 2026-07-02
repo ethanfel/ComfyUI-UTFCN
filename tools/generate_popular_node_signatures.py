@@ -842,6 +842,7 @@ def _class_body_global_names(cls):
 def _class_body_module_mutation_names(cls):
     global_names = _class_body_global_names(cls)
     names = set()
+    namespace_aliases = set()
 
     def add_assignment_targets(stmt):
         names.update(_assignment_target_names(stmt).intersection(global_names))
@@ -926,7 +927,9 @@ def _class_body_module_mutation_names(cls):
             self.generic_visit(node)
 
     for stmt in cls.body:
+        names.update(_namespace_alias_mutation_target_names(stmt, namespace_aliases))
         ClassBodyMutationVisitor().visit(stmt)
+        _update_namespace_aliases(stmt, namespace_aliases)
     return names
 
 
@@ -2022,17 +2025,39 @@ def _node_class_mappings(tree):
     return {node_type: binding for node_type, (_class_name, binding) in mappings.items() if node_type}
 
 
+def _literal_module_dict_string_keys(node, env):
+    if not isinstance(node, ast.Dict):
+        return set()
+    keys = set()
+    for key in node.keys:
+        if key is None:
+            continue
+        try:
+            key_value = _literal(key, env)
+        except UnsupportedStaticExpression:
+            continue
+        if isinstance(key_value, str) and key_value:
+            keys.add(key_value)
+    return keys
+
+
 def _node_class_mapping_keys(tree):
     if _has_module_wildcard_import(tree):
         return set()
-    mappings = _final_module_dict(
-        tree,
-        "NODE_CLASS_MAPPINGS",
-        lambda _value, _env, _class_bindings: True,
-    )
-    if not all(isinstance(node_type, str) for node_type in mappings):
-        return set()
-    return {node_type for node_type in mappings if node_type}
+    keys = set()
+    env = {}
+    class_bindings = {}
+    for stmt in tree.body:
+        if isinstance(stmt, ast.Assign) and _name_is_assigned(stmt, "NODE_CLASS_MAPPINGS"):
+            keys.update(_literal_module_dict_string_keys(stmt.value, env))
+        elif (
+            isinstance(stmt, ast.AnnAssign)
+            and _name_is_assigned(stmt, "NODE_CLASS_MAPPINGS")
+            and stmt.value is not None
+        ):
+            keys.update(_literal_module_dict_string_keys(stmt.value, env))
+        _apply_module_stmt_to_env(stmt, env, class_bindings)
+    return keys
 
 
 def _display_mappings(tree):

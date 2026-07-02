@@ -303,6 +303,50 @@ NODE_CLASS_MAPPINGS = {
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
 
+    def test_duplicate_node_id_with_invalid_duplicate_mapping_literal_skips_static_node(self):
+        source_a = '''
+class StaticDupNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "DupNode": StaticDupNode,
+}
+'''
+        source_b = '''
+def build_node():
+    return object()
+
+
+NODE_CLASS_MAPPINGS = {
+    "DupNode": build_node(),
+    "DupNode": build_node(),
+}
+'''
+        with tempfile.TemporaryDirectory() as tmp:
+            Path(tmp, "a.py").write_text(textwrap.dedent(source_a), encoding="utf-8")
+            Path(tmp, "b.py").write_text(textwrap.dedent(source_b), encoding="utf-8")
+            result = extract_repo_signatures(
+                Path(tmp),
+                {
+                    "id": "invalid-duplicate-node-pack",
+                    "title": "Invalid Duplicate Node Pack",
+                    "repository": "https://github.com/example/invalid-duplicate-node-pack",
+                    "rank": 1,
+                },
+            )
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
     def test_unsupported_reassignment_invalidates_static_env_value(self):
         source = '''
 def build_inputs():
@@ -3433,6 +3477,34 @@ H["NODE_CLASS_MAPPINGS"] = {}
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
 
+    def test_class_body_globals_alias_subscript_assignment_invalidates_static_node_mapping(self):
+        source = '''
+class ClassBodyGlobalAliasSubscriptAssignmentNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "ClassBodyGlobalAliasSubscriptAssignmentNode": ClassBodyGlobalAliasSubscriptAssignmentNode,
+}
+
+
+class MappingMutator:
+    ns = globals()
+    ns["NODE_CLASS_MAPPINGS"] = {}
+'''
+        result = self._extract_source(source, "class-body-global-alias-subscript-assignment-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
     def test_globals_alias_update_invalidates_static_node_mapping(self):
         source = '''
 class GlobalAliasUpdateNode:
@@ -3458,6 +3530,34 @@ G.update(NODE_CLASS_MAPPINGS={})
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
 
+    def test_class_body_globals_alias_update_invalidates_static_node_mapping(self):
+        source = '''
+class ClassBodyGlobalAliasUpdateNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "ClassBodyGlobalAliasUpdateNode": ClassBodyGlobalAliasUpdateNode,
+}
+
+
+class MappingMutator:
+    ns = globals()
+    ns.update(NODE_CLASS_MAPPINGS={})
+'''
+        result = self._extract_source(source, "class-body-global-alias-update-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
     def test_globals_alias_get_mutation_invalidates_static_node_mapping(self):
         source = '''
 class GlobalAliasGetMutationNode:
@@ -3479,6 +3579,34 @@ G = globals()
 G.get("NODE_CLASS_MAPPINGS").clear()
 '''
         result = self._extract_source(source, "global-alias-get-mutation-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_class_body_globals_chained_alias_subscript_assignment_invalidates_static_node_mapping(self):
+        source = '''
+class ClassBodyGlobalChainedAliasSubscriptAssignmentNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "ClassBodyGlobalChainedAliasSubscriptAssignmentNode": ClassBodyGlobalChainedAliasSubscriptAssignmentNode,
+}
+
+
+class MappingMutator:
+    ns = other = globals()
+    other["NODE_CLASS_MAPPINGS"] = {}
+'''
+        result = self._extract_source(source, "class-body-global-chained-alias-subscript-assignment-pack")
 
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
