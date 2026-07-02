@@ -2458,6 +2458,30 @@ NODE_CLASS_MAPPINGS = {
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
 
+    def test_no_arg_class_body_arbitrary_call_after_return_types_skips_node(self):
+        source = '''
+class NoArgClassBodyCallReturnTypesNode:
+    RETURN_TYPES = ["IMAGE"]
+    mutate()
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "NoArgClassBodyCallReturnTypesNode": NoArgClassBodyCallReturnTypesNode,
+}
+'''
+        result = self._extract_source(source, "no-arg-class-body-call-return-types-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
     def test_return_types_alias_arbitrary_call_skips_node(self):
         source = '''
 class AliasArbitraryCallReturnTypesNode:
@@ -3705,6 +3729,34 @@ mutate(ObserveAttributeCallNode.RETURN_TYPES)
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
 
+    def test_no_arg_arbitrary_call_after_mapping_skips_mapped_class_signature(self):
+        source = '''
+class NoArgMappedClassMutationNode:
+    RETURN_TYPES = ["IMAGE"]
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+def mutate():
+    NoArgMappedClassMutationNode.RETURN_TYPES.clear()
+
+
+NODE_CLASS_MAPPINGS = {
+    "NoArgMappedClassMutationNode": NoArgMappedClassMutationNode,
+}
+mutate()
+'''
+        result = self._extract_source(source, "no-arg-mapped-class-mutation-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
     def test_module_class_attribute_alias_arbitrary_call_after_mapping_skips_node(self):
         source = '''
 class ObserveAttributeAliasCallNode:
@@ -4304,6 +4356,30 @@ NODE_CLASS_MAPPINGS = {
 mutate(NODE_CLASS_MAPPINGS)
 '''
         result = self._extract_source(source, "arbitrary-call-mapping-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_no_arg_arbitrary_call_after_node_mapping_skips_node(self):
+        source = '''
+class NoArgMappingCallNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "NoArgMappingCallNode": NoArgMappingCallNode,
+}
+mutate()
+'''
+        result = self._extract_source(source, "no-arg-mapping-call-pack")
 
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
