@@ -1169,6 +1169,52 @@ NODE_CLASS_MAPPINGS = {
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
 
+    def test_input_types_default_referencing_return_types_skips_node(self):
+        source = '''
+class DefaultReferencesReturnTypesInputNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls, value=RETURN_TYPES):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "DefaultReferencesReturnTypesInputNode": DefaultReferencesReturnTypesInputNode,
+}
+'''
+        result = self._extract_source(source, "default-references-return-types-input-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_input_types_return_annotation_referencing_input_types_skips_node(self):
+        source = '''
+class AnnotationReferencesInputTypesNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls) -> INPUT_TYPES:
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "AnnotationReferencesInputTypesNode": AnnotationReferencesInputTypesNode,
+}
+'''
+        result = self._extract_source(source, "annotation-references-input-types-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
     def test_decorated_input_types_skips_node(self):
         source = '''
 def replace(fn):
@@ -2159,6 +2205,37 @@ NODE_CLASS_MAPPINGS = {
 NODE_CLASS_MAPPINGS = build_mappings()
 '''
         result = self._extract_source(source, "dynamic-mapping-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_dynamic_node_class_mapping_assignment_stays_invalid_after_static_reassignment(self):
+        source = '''
+def build_mappings():
+    return {"StickyDynamicMappingNode": StickyDynamicMappingNode}
+
+
+class StickyDynamicMappingNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "StickyDynamicMappingNode": StickyDynamicMappingNode,
+}
+NODE_CLASS_MAPPINGS = build_mappings()
+NODE_CLASS_MAPPINGS = {
+    "StickyDynamicMappingNode": StickyDynamicMappingNode,
+}
+'''
+        result = self._extract_source(source, "sticky-dynamic-mapping-pack")
 
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
@@ -3715,6 +3792,40 @@ NODE_DISPLAY_NAME_MAPPINGS = {
 NODE_DISPLAY_NAME_MAPPINGS = build_displays()
 '''
         result = self._extract_source(source, "dynamic-display-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_dynamic_display_mapping_assignment_stays_invalid_after_static_reassignment(self):
+        source = '''
+def build_displays():
+    return {"StickyDisplayInvalidatedNode": "Dynamic Display"}
+
+
+class StickyDisplayInvalidatedNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "StickyDisplayInvalidatedNode": StickyDisplayInvalidatedNode,
+}
+NODE_DISPLAY_NAME_MAPPINGS = {
+    "StickyDisplayInvalidatedNode": "Stale Display",
+}
+NODE_DISPLAY_NAME_MAPPINGS = build_displays()
+NODE_DISPLAY_NAME_MAPPINGS = {
+    "StickyDisplayInvalidatedNode": "Recovered Display",
+}
+'''
+        result = self._extract_source(source, "sticky-display-invalidated-pack")
 
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
