@@ -12,6 +12,10 @@ from tools.generate_popular_node_signatures import (
 
 
 class StaticExtractionTests(unittest.TestCase):
+    def _normalise_generated_at(self, text):
+        parsed = json.loads(text)
+        return text.replace(parsed["generated_at"], "<generated-at>")
+
     def test_normalise_input_spec_reduces_combo_lists(self):
         self.assertEqual("COMBO", normalise_input_spec((["nearest", "bilinear"],)))
         self.assertEqual("IMAGE", normalise_input_spec(("IMAGE",)))
@@ -99,15 +103,105 @@ NODE_CLASS_MAPPINGS = {
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
 
+    def test_skips_unparseable_python_files_and_extracts_static_nodes(self):
+        good_source = '''
+class GoodNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "GoodNode": GoodNode,
+}
+'''
+        with tempfile.TemporaryDirectory() as tmp:
+            Path(tmp, "bad.py").write_bytes(b"class Bad:\xff\n")
+            Path(tmp, "good.py").write_text(textwrap.dedent(good_source), encoding="utf-8")
+            result = extract_repo_signatures(
+                Path(tmp),
+                {
+                    "id": "mixed-pack",
+                    "title": "Mixed Pack",
+                    "repository": "https://github.com/example/mixed-pack",
+                    "rank": 1,
+                },
+            )
+
+        self.assertIn("GoodNode", result["nodes"])
+        self.assertEqual("ok", result["pack"]["status"])
+
+    def test_unsupported_reassignment_invalidates_static_env_value(self):
+        source = '''
+def build_inputs():
+    return {"required": {"image": ("IMAGE",)}}
+
+
+INPUTS = {
+    "required": {
+        "image": ("IMAGE",),
+    },
+}
+INPUTS = build_inputs()
+
+
+class StaleEnvNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return INPUTS
+
+
+NODE_CLASS_MAPPINGS = {
+    "StaleEnvNode": StaleEnvNode,
+}
+'''
+        with tempfile.TemporaryDirectory() as tmp:
+            Path(tmp, "__init__.py").write_text(textwrap.dedent(source), encoding="utf-8")
+            result = extract_repo_signatures(
+                Path(tmp),
+                {
+                    "id": "stale-env-pack",
+                    "title": "Stale Env Pack",
+                    "repository": "https://github.com/example/stale-env-pack",
+                    "rank": 1,
+                },
+            )
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
     def test_write_artifact_is_deterministic(self):
         with tempfile.TemporaryDirectory() as tmp:
-            out = Path(tmp, "popular_node_signatures.json")
+            out_one = Path(tmp, "one.json")
+            out_two = Path(tmp, "two.json")
             write_artifact(
-                out,
-                sources={"manager_url": "https://example.invalid/manager.json", "limit": 1},
+                out_one,
+                sources={
+                    "manager_url": "https://example.invalid/manager.json",
+                    "limit": 1,
+                    "registry": {"z": "last", "a": "first"},
+                },
                 packs={
-                    "b-pack": {"id": "b-pack", "title": "B Pack", "status": "ok"},
-                    "a-pack": {"id": "a-pack", "title": "A Pack", "status": "ok"},
+                    "b-pack": {
+                        "id": "b-pack",
+                        "title": "B Pack",
+                        "status": "ok",
+                        "metadata": {"z": 2, "a": 1},
+                    },
+                    "a-pack": {
+                        "id": "a-pack",
+                        "title": "A Pack",
+                        "status": "ok",
+                        "metadata": {"z": 4, "a": 3},
+                    },
                 },
                 nodes={
                     "BNode": {
@@ -115,7 +209,7 @@ NODE_CLASS_MAPPINGS = {
                         "display": "B Node",
                         "pack": "b-pack",
                         "repository": "https://github.com/example/b-pack",
-                        "inputs": {},
+                        "inputs": {"zeta": "FLOAT", "alpha": "IMAGE"},
                         "required": [],
                         "outputs": ["IMAGE"],
                         "output_names": ["image"],
@@ -126,7 +220,7 @@ NODE_CLASS_MAPPINGS = {
                         "display": "A Node",
                         "pack": "a-pack",
                         "repository": "https://github.com/example/a-pack",
-                        "inputs": {},
+                        "inputs": {"zeta": "FLOAT", "alpha": "IMAGE"},
                         "required": [],
                         "outputs": ["IMAGE"],
                         "output_names": ["image"],
@@ -134,10 +228,59 @@ NODE_CLASS_MAPPINGS = {
                     },
                 },
             )
-            parsed = json.loads(out.read_text(encoding="utf-8"))
+            write_artifact(
+                out_two,
+                sources={
+                    "registry": {"a": "first", "z": "last"},
+                    "limit": 1,
+                    "manager_url": "https://example.invalid/manager.json",
+                },
+                packs={
+                    "a-pack": {
+                        "metadata": {"a": 3, "z": 4},
+                        "status": "ok",
+                        "title": "A Pack",
+                        "id": "a-pack",
+                    },
+                    "b-pack": {
+                        "metadata": {"a": 1, "z": 2},
+                        "status": "ok",
+                        "title": "B Pack",
+                        "id": "b-pack",
+                    },
+                },
+                nodes={
+                    "ANode": {
+                        "confidence": "static_exact",
+                        "output_names": ["image"],
+                        "outputs": ["IMAGE"],
+                        "required": [],
+                        "inputs": {"alpha": "IMAGE", "zeta": "FLOAT"},
+                        "repository": "https://github.com/example/a-pack",
+                        "pack": "a-pack",
+                        "display": "A Node",
+                        "type": "ANode",
+                    },
+                    "BNode": {
+                        "confidence": "static_exact",
+                        "output_names": ["image"],
+                        "outputs": ["IMAGE"],
+                        "required": [],
+                        "inputs": {"alpha": "IMAGE", "zeta": "FLOAT"},
+                        "repository": "https://github.com/example/b-pack",
+                        "pack": "b-pack",
+                        "display": "B Node",
+                        "type": "BNode",
+                    },
+                },
+            )
+            text_one = out_one.read_text(encoding="utf-8")
+            text_two = out_two.read_text(encoding="utf-8")
+            parsed = json.loads(text_one)
 
         self.assertEqual(["a-pack", "b-pack"], list(parsed["packs"]))
         self.assertEqual(["ANode", "BNode"], list(parsed["nodes"]))
+        self.assertEqual(self._normalise_generated_at(text_one), self._normalise_generated_at(text_two))
 
 
 if __name__ == "__main__":

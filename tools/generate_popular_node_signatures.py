@@ -42,9 +42,11 @@ def _collect_module_env(tree):
             continue
         if len(stmt.targets) != 1 or not isinstance(stmt.targets[0], ast.Name):
             continue
+        name = stmt.targets[0].id
         try:
-            env[stmt.targets[0].id] = _literal(stmt.value, env)
+            env[name] = _literal(stmt.value, env)
         except UnsupportedStaticExpression:
+            env.pop(name, None)
             continue
     return env
 
@@ -181,14 +183,23 @@ def _python_files(repo_dir):
                 yield Path(root, filename)
 
 
+def _parse_python_file(path):
+    try:
+        return ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    except UnicodeDecodeError:
+        try:
+            return ast.parse(path.read_text(encoding="utf-8", errors="ignore"), filename=str(path))
+        except SyntaxError:
+            return None
+    except SyntaxError:
+        return None
+
+
 def extract_repo_signatures(repo_dir, pack_meta):
     nodes = {}
     for path in sorted(_python_files(repo_dir)):
-        try:
-            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-        except UnicodeDecodeError:
-            tree = ast.parse(path.read_text(encoding="utf-8", errors="ignore"), filename=str(path))
-        except SyntaxError:
+        tree = _parse_python_file(path)
+        if tree is None:
             continue
         env = _collect_module_env(tree)
         mappings = _node_class_mappings(tree, env)
@@ -213,13 +224,21 @@ def extract_repo_signatures(repo_dir, pack_meta):
     return {"pack": pack, "nodes": nodes}
 
 
+def _sorted_json_value(value):
+    if isinstance(value, dict):
+        return {key: _sorted_json_value(value[key]) for key in sorted(value)}
+    if isinstance(value, list):
+        return [_sorted_json_value(item) for item in value]
+    return value
+
+
 def write_artifact(path, sources, packs, nodes):
     payload = {
         "schema_version": SCHEMA_VERSION,
         "generated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
-        "sources": sources,
-        "packs": {key: packs[key] for key in sorted(packs)},
-        "nodes": {key: nodes[key] for key in sorted(nodes)},
+        "sources": _sorted_json_value(sources),
+        "packs": _sorted_json_value(packs),
+        "nodes": _sorted_json_value(nodes),
     }
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2, sort_keys=False) + "\n", encoding="utf-8")
