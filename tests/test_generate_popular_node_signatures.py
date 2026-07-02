@@ -1307,6 +1307,31 @@ NODE_CLASS_MAPPINGS = {
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
 
+    def test_return_types_unpacked_alias_mutation_skips_node(self):
+        source = '''
+class UnpackedAliasMutatedReturnTypesNode:
+    RETURN_TYPES = ["IMAGE"]
+    ALIAS, = (RETURN_TYPES,)
+    ALIAS.clear()
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "UnpackedAliasMutatedReturnTypesNode": UnpackedAliasMutatedReturnTypesNode,
+}
+'''
+        result = self._extract_source(source, "unpacked-alias-mutated-return-types-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
     def test_return_types_alias_subscript_assignment_skips_node(self):
         source = '''
 class AliasSubscriptMutatedReturnTypesNode:
@@ -1912,6 +1937,57 @@ Alias = AliasPatchedNode
 Alias.RETURN_TYPES = ("MASK",)
 '''
         result = self._extract_source(source, "alias-patched-node-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_module_class_attribute_alias_mutation_before_mapping_skips_node(self):
+        source = '''
+class PreMappingAttributeAliasNode:
+    RETURN_TYPES = ["IMAGE"]
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+RET = PreMappingAttributeAliasNode.RETURN_TYPES
+RET.clear()
+
+NODE_CLASS_MAPPINGS = {
+    "PreMappingAttributeAliasNode": PreMappingAttributeAliasNode,
+}
+'''
+        result = self._extract_source(source, "pre-mapping-attribute-alias-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_module_class_attribute_alias_mutation_after_mapping_skips_node(self):
+        source = '''
+class PostMappingAttributeAliasNode:
+    RETURN_TYPES = ["IMAGE"]
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "PostMappingAttributeAliasNode": PostMappingAttributeAliasNode,
+}
+RET = PostMappingAttributeAliasNode.RETURN_TYPES
+RET.clear()
+'''
+        result = self._extract_source(source, "post-mapping-attribute-alias-pack")
 
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
