@@ -1288,6 +1288,55 @@ NODE_CLASS_MAPPINGS = {
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
 
+    def test_getattr_method_mutation_to_return_types_skips_node(self):
+        source = '''
+class GetattrMethodMutatedReturnTypesNode:
+    RETURN_TYPES = ["IMAGE"]
+    getattr(RETURN_TYPES, "clear")()
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "GetattrMethodMutatedReturnTypesNode": GetattrMethodMutatedReturnTypesNode,
+}
+'''
+        result = self._extract_source(source, "getattr-method-mutated-return-types-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_getattr_method_mutation_to_return_names_skips_node(self):
+        source = '''
+class GetattrMethodMutatedReturnNamesNode:
+    RETURN_TYPES = ("IMAGE",)
+    RETURN_NAMES = ["image"]
+    getattr(RETURN_NAMES, "clear")()
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "GetattrMethodMutatedReturnNamesNode": GetattrMethodMutatedReturnNamesNode,
+}
+'''
+        result = self._extract_source(source, "getattr-method-mutated-return-names-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
     def test_except_handler_binding_to_return_types_skips_node(self):
         source = '''
 class ExceptHandlerBoundReturnTypesNode:
