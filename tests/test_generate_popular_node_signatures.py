@@ -2303,6 +2303,56 @@ globals().get("GlobalsGetReturnTypesNode").RETURN_TYPES.clear()
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
 
+    def test_getattr_class_attribute_alias_mutation_after_mapping_skips_node(self):
+        source = '''
+class GetattrAttributeAliasNode:
+    RETURN_TYPES = ["IMAGE"]
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "GetattrAttributeAliasNode": GetattrAttributeAliasNode,
+}
+RET = getattr(GetattrAttributeAliasNode, "RETURN_TYPES")
+RET.clear()
+'''
+        result = self._extract_source(source, "getattr-attribute-alias-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_getattr_namespace_class_attribute_alias_mutation_after_mapping_skips_node(self):
+        source = '''
+class GetattrNamespaceAttributeAliasNode:
+    RETURN_TYPES = ["IMAGE"]
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "GetattrNamespaceAttributeAliasNode": GetattrNamespaceAttributeAliasNode,
+}
+RET = getattr(globals()["GetattrNamespaceAttributeAliasNode"], "RETURN_TYPES")
+RET.clear()
+'''
+        result = self._extract_source(source, "getattr-namespace-attribute-alias-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
     def test_module_class_tuple_alias_patch_after_mapping_skips_node(self):
         source = '''
 class TupleAliasPatchedNode:
@@ -2447,6 +2497,56 @@ NODE_CLASS_MAPPINGS = {
 globals().update(NODE_CLASS_MAPPINGS={})
 '''
         result = self._extract_source(source, "global-update-mapping-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_globals_subscript_alias_mutation_invalidates_static_node_mapping(self):
+        source = '''
+class GlobalAliasMutatedMappingNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "GlobalAliasMutatedMappingNode": GlobalAliasMutatedMappingNode,
+}
+ALIAS = globals()["NODE_CLASS_MAPPINGS"]
+ALIAS.clear()
+'''
+        result = self._extract_source(source, "global-alias-mutated-mapping-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_globals_get_alias_mutation_invalidates_static_node_mapping(self):
+        source = '''
+class GlobalGetAliasMutatedMappingNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "GlobalGetAliasMutatedMappingNode": GlobalGetAliasMutatedMappingNode,
+}
+ALIAS = globals().get("NODE_CLASS_MAPPINGS")
+ALIAS.clear()
+'''
+        result = self._extract_source(source, "global-get-alias-mutated-mapping-pack")
 
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])

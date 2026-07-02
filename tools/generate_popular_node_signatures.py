@@ -1035,14 +1035,22 @@ def _expanded_class_attribute_names(names, class_aliases):
 def _class_attribute_alias_sources(value, class_attribute_aliases, class_aliases, class_bindings):
     if isinstance(value, ast.Name):
         return set(class_attribute_aliases.get(value.id, ()))
-    if not isinstance(value, ast.Attribute) or value.attr not in _CLASS_SIGNATURE_ATTRS:
-        return set()
-    name = _root_name(value.value)
-    if name in class_aliases:
-        return set(class_aliases[name])
-    if name in class_bindings:
-        return {name}
-    return set()
+
+    names = set()
+    if isinstance(value, ast.Attribute) and value.attr in _CLASS_SIGNATURE_ATTRS:
+        name = _root_name(value.value)
+        if name is not None:
+            names.add(name)
+    else:
+        names.update(_getattr_signature_target_names(value))
+
+    sources = set()
+    for name in names:
+        if name in class_aliases:
+            sources.update(class_aliases[name])
+        if name in class_bindings:
+            sources.add(name)
+    return sources
 
 
 def _update_class_attribute_alias_from_unpack(
@@ -1125,11 +1133,15 @@ def _module_class_attribute_invalidated_names(stmt, class_aliases, class_attribu
 
 
 def _module_dict_alias_sources(value, name, aliases):
-    if not isinstance(value, ast.Name):
-        return set()
-    if value.id == name:
+    if isinstance(value, ast.Name):
+        if value.id == name:
+            return {name}
+        return set(aliases.get(value.id, ()))
+
+    namespace_name = _namespace_subscript_name(value) or _namespace_lookup_name(value)
+    if namespace_name == name:
         return {name}
-    return set(aliases.get(value.id, ()))
+    return set()
 
 
 def _update_module_dict_alias_from_unpack(target, value, name, aliases):
