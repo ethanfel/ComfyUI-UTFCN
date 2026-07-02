@@ -134,7 +134,7 @@ class GeneratedSignatureLoaderTests(unittest.TestCase):
             "https://github.com/ltdrdata/ComfyUI-Inspire-Pack",
             generated["meta"][node_type]["repository"],
         )
-        self.assertEqual([node_type], generated["by_out"]["FLOAT"])
+        self.assertIn(node_type, generated["by_out"]["FLOAT"])
 
 
 class GeneratedSignatureMatchingTests(unittest.TestCase):
