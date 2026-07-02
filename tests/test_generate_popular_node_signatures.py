@@ -1224,6 +1224,42 @@ NODE_CLASS_MAPPINGS = {
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
 
+    def test_node_mapping_uses_assignment_time_class_binding(self):
+        source = '''
+class Node:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "Node": Node,
+}
+
+
+class Node:
+    RETURN_TYPES = ("MASK",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "mask": ("MASK",),
+            },
+        }
+'''
+        result = self._extract_source(source, "assignment-time-class-binding-pack")
+
+        self.assertEqual(["IMAGE"], result["nodes"]["Node"]["outputs"])
+        self.assertEqual({"image": "IMAGE"}, result["nodes"]["Node"]["inputs"])
+        self.assertEqual("ok", result["pack"]["status"])
+
     def test_conditional_class_mapping_skips_node(self):
         source = '''
 if True:
@@ -1269,6 +1305,35 @@ NODE_CLASS_MAPPINGS = {
         result = self._extract_source(source, "top-level-node-class-pack")
 
         self.assertIn("TopLevelMappedNode", result["nodes"])
+        self.assertEqual("ok", result["pack"]["status"])
+
+    def test_node_mapping_key_uses_assignment_time_env(self):
+        source = '''
+KEY = "Original"
+
+
+class Node:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    KEY: Node,
+}
+KEY = "Wrong"
+'''
+        result = self._extract_source(source, "assignment-time-key-pack")
+
+        self.assertIn("Original", result["nodes"])
+        self.assertNotIn("Wrong", result["nodes"])
+        self.assertEqual(["IMAGE"], result["nodes"]["Original"]["outputs"])
         self.assertEqual("ok", result["pack"]["status"])
 
     def test_mutated_node_class_mapping_skips_node(self):
