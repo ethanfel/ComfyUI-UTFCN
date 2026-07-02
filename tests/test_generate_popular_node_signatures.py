@@ -590,6 +590,66 @@ NODE_CLASS_MAPPINGS = {
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
 
+    def test_post_class_input_reassignment_skips_static_node(self):
+        source = '''
+def build_inputs():
+    return {"required": {"mask": ("MASK",)}}
+
+
+INPUTS = {
+    "required": {
+        "image": ("IMAGE",),
+    },
+}
+
+
+class PostClassInputRebindNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return INPUTS
+
+
+INPUTS = build_inputs()
+
+NODE_CLASS_MAPPINGS = {
+    "PostClassInputRebindNode": PostClassInputRebindNode,
+}
+'''
+        result = self._extract_source(source, "post-class-input-rebind-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_direct_literal_input_types_survives_post_class_env_changes(self):
+        source = '''
+INPUTS = build_inputs()
+
+
+class LiteralInputTypesAfterEnvChangeNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+INPUTS = build_inputs()
+
+NODE_CLASS_MAPPINGS = {
+    "LiteralInputTypesAfterEnvChangeNode": LiteralInputTypesAfterEnvChangeNode,
+}
+'''
+        result = self._extract_source(source, "literal-input-after-env-change-pack")
+
+        self.assertIn("LiteralInputTypesAfterEnvChangeNode", result["nodes"])
+        self.assertEqual("ok", result["pack"]["status"])
+
     def test_dynamic_return_types_reassignment_skips_node(self):
         source = '''
 def build_outputs():
@@ -662,6 +722,31 @@ NODE_CLASS_MAPPINGS = {
 }
 '''
         result = self._extract_source(source, "mutated-return-types-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_return_types_alias_mutation_skips_node(self):
+        source = '''
+class AliasMutatedReturnTypesNode:
+    RETURN_TYPES = ["IMAGE"]
+    ALIAS = RETURN_TYPES
+    ALIAS.clear()
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "AliasMutatedReturnTypesNode": AliasMutatedReturnTypesNode,
+}
+'''
+        result = self._extract_source(source, "alias-mutated-return-types-pack")
 
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])

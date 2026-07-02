@@ -400,9 +400,22 @@ def _class_defs(tree):
 
 def _class_attr(cls, name, env):
     value = _MISSING
+    aliases = set()
     for stmt in cls.body:
         if isinstance(stmt, ast.Assign):
-            if name not in _assignment_target_names(stmt):
+            target_names = _assignment_target_names(stmt)
+            if (
+                len(stmt.targets) == 1
+                and isinstance(stmt.targets[0], ast.Name)
+                and stmt.targets[0].id != name
+                and isinstance(stmt.value, ast.Name)
+                and stmt.value.id == name
+            ):
+                aliases.add(stmt.targets[0].id)
+                continue
+            if aliases.intersection(target_names):
+                aliases.difference_update(target_names)
+            if name not in target_names:
                 continue
             if len(stmt.targets) == 1 and isinstance(stmt.targets[0], ast.Name):
                 try:
@@ -413,7 +426,18 @@ def _class_attr(cls, name, env):
                 value = _INVALID
             continue
         if isinstance(stmt, ast.AnnAssign):
-            if name not in _assignment_target_names(stmt):
+            target_names = _assignment_target_names(stmt)
+            if (
+                isinstance(stmt.target, ast.Name)
+                and stmt.target.id != name
+                and isinstance(stmt.value, ast.Name)
+                and stmt.value.id == name
+            ):
+                aliases.add(stmt.target.id)
+                continue
+            if aliases.intersection(target_names):
+                aliases.difference_update(target_names)
+            if name not in target_names:
                 continue
             if isinstance(stmt.target, ast.Name) and stmt.value is None:
                 continue
@@ -426,21 +450,33 @@ def _class_attr(cls, name, env):
                     value = _INVALID
             continue
         if isinstance(stmt, ast.AugAssign):
-            if name in _assignment_target_names(stmt):
+            target_names = _assignment_target_names(stmt)
+            if aliases.intersection(target_names):
+                aliases.difference_update(target_names)
+            if name in target_names:
                 value = _INVALID
             continue
         if isinstance(stmt, ast.Delete):
-            if name in _delete_target_names(stmt):
+            target_names = _delete_target_names(stmt)
+            if aliases.intersection(target_names):
+                aliases.difference_update(target_names)
+            if name in target_names:
                 value = _INVALID
             continue
         if isinstance(stmt, ast.Expr):
-            if name in _mutating_call_target_names(stmt):
+            mutating_targets = _mutating_call_target_names(stmt)
+            if aliases.intersection(mutating_targets):
+                value = _INVALID
+            if name in mutating_targets:
                 value = _INVALID
             if name in _bound_names(stmt):
                 value = _INVALID
             continue
         if isinstance(stmt, (ast.If, ast.For, ast.AsyncFor, ast.While, ast.Try, ast.With, ast.AsyncWith, ast.Match)):
-            if name in _assigned_names_in_control_flow(stmt):
+            target_names = _assigned_names_in_control_flow(stmt)
+            if aliases.intersection(target_names):
+                value = _INVALID
+            if name in target_names:
                 value = _INVALID
             if _has_wildcard_import_in_control_flow(stmt):
                 value = _INVALID
@@ -565,10 +601,10 @@ def _display_mappings(tree, env):
     return {str(k): str(v) for k, v in displays.items()}
 
 
-def _signature_from_class(node_type, cls, display, pack_meta, env):
-    input_types = _input_types(cls, env)
-    return_types = _class_attr(cls, "RETURN_TYPES", env)
-    return_names = _class_attr(cls, "RETURN_NAMES", env)
+def _signature_from_class(node_type, cls, display, pack_meta, class_env, input_env):
+    input_types = _input_types(cls, input_env)
+    return_types = _class_attr(cls, "RETURN_TYPES", class_env)
+    return_names = _class_attr(cls, "RETURN_NAMES", class_env)
     if return_types is _INVALID or return_names is _INVALID:
         return None
     if not isinstance(input_types, dict) or not isinstance(return_types, (list, tuple)):
@@ -639,7 +675,7 @@ def extract_repo_signatures(repo_dir, pack_meta):
             if binding is None:
                 continue
             cls, class_env = binding
-            sig = _signature_from_class(node_type, cls, displays.get(node_type), pack_meta, class_env)
+            sig = _signature_from_class(node_type, cls, displays.get(node_type), pack_meta, class_env, env)
             if sig is not None:
                 nodes[node_type] = sig
 
