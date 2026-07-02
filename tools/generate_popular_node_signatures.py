@@ -414,6 +414,7 @@ def _class_attr(cls, name, env):
                 aliases.add(stmt.targets[0].id)
                 continue
             if aliases.intersection(target_names):
+                value = _INVALID
                 aliases.difference_update(target_names)
             if name not in target_names:
                 continue
@@ -436,6 +437,7 @@ def _class_attr(cls, name, env):
                 aliases.add(stmt.target.id)
                 continue
             if aliases.intersection(target_names):
+                value = _INVALID
                 aliases.difference_update(target_names)
             if name not in target_names:
                 continue
@@ -452,6 +454,7 @@ def _class_attr(cls, name, env):
         if isinstance(stmt, ast.AugAssign):
             target_names = _assignment_target_names(stmt)
             if aliases.intersection(target_names):
+                value = _INVALID
                 aliases.difference_update(target_names)
             if name in target_names:
                 value = _INVALID
@@ -459,6 +462,7 @@ def _class_attr(cls, name, env):
         if isinstance(stmt, ast.Delete):
             target_names = _delete_target_names(stmt)
             if aliases.intersection(target_names):
+                value = _INVALID
                 aliases.difference_update(target_names)
             if name in target_names:
                 value = _INVALID

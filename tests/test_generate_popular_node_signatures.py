@@ -751,6 +751,82 @@ NODE_CLASS_MAPPINGS = {
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
 
+    def test_return_types_alias_subscript_assignment_skips_node(self):
+        source = '''
+class AliasSubscriptMutatedReturnTypesNode:
+    RETURN_TYPES = ["IMAGE"]
+    ALIAS = RETURN_TYPES
+    ALIAS[0] = "MASK"
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "AliasSubscriptMutatedReturnTypesNode": AliasSubscriptMutatedReturnTypesNode,
+}
+'''
+        result = self._extract_source(source, "alias-subscript-mutated-return-types-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_return_types_alias_augmented_assignment_skips_node(self):
+        source = '''
+class AliasAugmentedMutatedReturnTypesNode:
+    RETURN_TYPES = ["IMAGE"]
+    ALIAS = RETURN_TYPES
+    ALIAS += ["MASK"]
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "AliasAugmentedMutatedReturnTypesNode": AliasAugmentedMutatedReturnTypesNode,
+}
+'''
+        result = self._extract_source(source, "alias-augmented-mutated-return-types-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_return_names_alias_subscript_assignment_skips_node(self):
+        source = '''
+class AliasSubscriptMutatedReturnNamesNode:
+    RETURN_TYPES = ("IMAGE",)
+    RETURN_NAMES = ["image"]
+    ALIAS = RETURN_NAMES
+    ALIAS[0] = "mask"
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "AliasSubscriptMutatedReturnNamesNode": AliasSubscriptMutatedReturnNamesNode,
+}
+'''
+        result = self._extract_source(source, "alias-subscript-mutated-return-names-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
     def test_class_return_types_uses_definition_time_module_env(self):
         source = '''
 RETURNS = ("IMAGE",)
