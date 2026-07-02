@@ -1414,6 +1414,31 @@ NODE_CLASS_MAPPINGS = {
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
 
+    def test_return_types_starred_unpacked_alias_mutation_skips_node(self):
+        source = '''
+class StarredUnpackedAliasMutatedReturnTypesNode:
+    RETURN_TYPES = ["IMAGE"]
+    ALIAS, *REST = (RETURN_TYPES, [], [])
+    ALIAS.clear()
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "StarredUnpackedAliasMutatedReturnTypesNode": StarredUnpackedAliasMutatedReturnTypesNode,
+}
+'''
+        result = self._extract_source(source, "starred-unpacked-alias-mutated-return-types-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
     def test_return_types_alias_subscript_assignment_skips_node(self):
         source = '''
 class AliasSubscriptMutatedReturnTypesNode:
@@ -1486,6 +1511,32 @@ NODE_CLASS_MAPPINGS = {
 }
 '''
         result = self._extract_source(source, "alias-subscript-mutated-return-names-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_return_names_starred_unpacked_alias_mutation_skips_node(self):
+        source = '''
+class StarredUnpackedAliasMutatedReturnNamesNode:
+    RETURN_TYPES = ("IMAGE",)
+    RETURN_NAMES = ["image"]
+    ALIAS, *REST = (RETURN_NAMES, [], [])
+    ALIAS.clear()
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "StarredUnpackedAliasMutatedReturnNamesNode": StarredUnpackedAliasMutatedReturnNamesNode,
+}
+'''
+        result = self._extract_source(source, "starred-unpacked-alias-mutated-return-names-pack")
 
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
@@ -2151,6 +2202,31 @@ Alias.RETURN_TYPES = ("MASK",)
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
 
+    def test_module_class_starred_alias_patch_after_mapping_skips_node(self):
+        source = '''
+class StarredAliasPatchedNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "StarredAliasPatchedNode": StarredAliasPatchedNode,
+}
+Alias, *REST = (StarredAliasPatchedNode, object(), object())
+Alias.RETURN_TYPES = ("MASK",)
+'''
+        result = self._extract_source(source, "starred-alias-patched-node-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
     def test_module_class_globals_subscript_alias_patch_after_mapping_skips_node(self):
         source = '''
 class GlobalsSubscriptAliasPatchedNode:
@@ -2299,6 +2375,32 @@ NODE_CLASS_MAPPINGS = {
 }
 '''
         result = self._extract_source(source, "tuple-attribute-alias-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_module_class_attribute_starred_alias_mutation_skips_node(self):
+        source = '''
+class StarredAttributeAliasNode:
+    RETURN_TYPES = ["IMAGE"]
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+RET, *REST = (StarredAttributeAliasNode.RETURN_TYPES, [], [])
+RET.clear()
+
+NODE_CLASS_MAPPINGS = {
+    "StarredAttributeAliasNode": StarredAttributeAliasNode,
+}
+'''
+        result = self._extract_source(source, "starred-attribute-alias-pack")
 
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
@@ -2696,6 +2798,31 @@ ALIAS, = (NODE_CLASS_MAPPINGS,)
 ALIAS.clear()
 '''
         result = self._extract_source(source, "unpacked-alias-mutated-mapping-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_starred_unpacked_alias_mutation_invalidates_static_node_mapping(self):
+        source = '''
+class StarredUnpackedAliasMutatedMappingNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "StarredUnpackedAliasMutatedMappingNode": StarredUnpackedAliasMutatedMappingNode,
+}
+ALIAS, *REST = (NODE_CLASS_MAPPINGS, {}, {})
+ALIAS.clear()
+'''
+        result = self._extract_source(source, "starred-unpacked-alias-mutated-mapping-pack")
 
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])

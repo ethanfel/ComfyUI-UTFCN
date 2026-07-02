@@ -759,17 +759,42 @@ def _input_types_decorators_are_supported(decorators, classmethod_shadowed):
     return True
 
 
+def _unpack_target_value_pairs(target, value):
+    if not isinstance(target, (ast.Tuple, ast.List)) or not isinstance(value, (ast.Tuple, ast.List)):
+        return ()
+
+    targets = target.elts
+    values = value.elts
+    starred_indices = [index for index, item in enumerate(targets) if isinstance(item, ast.Starred)]
+    if not starred_indices:
+        if len(targets) != len(values):
+            return ()
+        return tuple(zip(targets, values))
+
+    if len(starred_indices) != 1:
+        return ()
+
+    starred_index = starred_indices[0]
+    prefix_count = starred_index
+    suffix_count = len(targets) - starred_index - 1
+    if len(values) < prefix_count + suffix_count:
+        return ()
+
+    pairs = [(targets[index], values[index]) for index in range(prefix_count)]
+    if suffix_count:
+        target_suffix = targets[-suffix_count:]
+        value_suffix = values[-suffix_count:]
+        pairs.extend(zip(target_suffix, value_suffix))
+    return tuple(pairs)
+
+
 def _class_attr_alias_sources(value, name, aliases):
     return isinstance(value, ast.Name) and (value.id == name or value.id in aliases)
 
 
 def _update_class_attr_aliases_from_unpack(target, value, name, aliases):
-    if not isinstance(target, (ast.Tuple, ast.List)) or not isinstance(value, (ast.Tuple, ast.List)):
-        return False
-    if len(target.elts) != len(value.elts):
-        return False
     found = False
-    for target_item, value_item in zip(target.elts, value.elts):
+    for target_item, value_item in _unpack_target_value_pairs(target, value):
         if not isinstance(target_item, ast.Name):
             continue
         if _class_attr_alias_sources(value_item, name, aliases):
@@ -997,11 +1022,7 @@ def _class_alias_sources(value, class_aliases, class_bindings):
 
 
 def _update_class_alias_from_unpack(target, value, class_aliases, class_bindings):
-    if not isinstance(target, (ast.Tuple, ast.List)) or not isinstance(value, (ast.Tuple, ast.List)):
-        return
-    if len(target.elts) != len(value.elts):
-        return
-    for target_item, value_item in zip(target.elts, value.elts):
+    for target_item, value_item in _unpack_target_value_pairs(target, value):
         if not isinstance(target_item, ast.Name):
             continue
         sources = _class_alias_sources(value_item, class_aliases, class_bindings)
@@ -1066,11 +1087,7 @@ def _update_class_attribute_alias_from_unpack(
     class_aliases,
     class_bindings,
 ):
-    if not isinstance(target, (ast.Tuple, ast.List)) or not isinstance(value, (ast.Tuple, ast.List)):
-        return
-    if len(target.elts) != len(value.elts):
-        return
-    for target_item, value_item in zip(target.elts, value.elts):
+    for target_item, value_item in _unpack_target_value_pairs(target, value):
         if not isinstance(target_item, ast.Name):
             continue
         sources = _class_attribute_alias_sources(
@@ -1151,11 +1168,7 @@ def _module_dict_alias_sources(value, name, aliases):
 
 
 def _update_module_dict_alias_from_unpack(target, value, name, aliases):
-    if not isinstance(target, (ast.Tuple, ast.List)) or not isinstance(value, (ast.Tuple, ast.List)):
-        return
-    if len(target.elts) != len(value.elts):
-        return
-    for target_item, value_item in zip(target.elts, value.elts):
+    for target_item, value_item in _unpack_target_value_pairs(target, value):
         if not isinstance(target_item, ast.Name):
             continue
         sources = _module_dict_alias_sources(value_item, name, aliases)
