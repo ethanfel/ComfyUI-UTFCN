@@ -1,0 +1,84 @@
+{
+  "_readme": [
+    "UTFCN curated equivalence rules (the 'verified' tier — safe to auto-apply, incl. Force mode).",
+    "",
+    "You rarely NEED rules: UTFCN already auto-detects any custom node whose input",
+    "name->type map and ordered output types are IDENTICAL to a core node ('exact'",
+    "tier), and surfaces looser 'partial' matches as suggestions. Add a rule here",
+    "only to (a) bless a partial match as safe to auto-apply, or (b) fix up slots",
+    "whose NAMES differ so the swap stays lossless.",
+    "",
+    "Schema — 'rules' maps a source node type to ONE target or an ordered list of",
+    "targets (first installed one wins, so put the core node first):",
+    "",
+    "  \"rules\": {",
+    "    \"SourceNodeType\": [",
+    "      {",
+    "        \"to\": \"TargetNodeType\",",
+    "        \"note\": \"why this is equivalent (shown in the preview)\",",
+    "        \"inputs\":  { \"srcInputName\":  \"dstInputName\"  },",
+    "        \"widgets\": { \"srcWidgetName\": \"dstWidgetName\" },",
+    "        \"outputs\": { \"srcOutputName\": \"dstOutputName\" }",
+    "      }",
+    "    ]",
+    "  }",
+    "",
+    "Any input/widget/output slot you don't list is matched by identical name, then",
+    "by type+order. Don't edit this file for your own rules — put those in",
+    "user_mappings.json (same schema); it is merged on top and survives updates.",
+    "",
+    "The rules below were mined from installed packs (ComfyUI_essentials, KJNodes,",
+    "was-node-suite) and verified lossless against the real core signatures. Rules",
+    "for nodes you don't have installed are simply ignored."
+  ],
+
+  "rules": {
+    "GetImageSize+": [
+      {
+        "to": "GetImageSize",
+        "note": "essentials Get Image Size == core Get Image Size; 'count' is core's 'batch_size'.",
+        "outputs": { "count": "batch_size" }
+      }
+    ],
+    "MaskPreview+": [
+      {
+        "to": "MaskPreview",
+        "note": "essentials mask preview == core MaskPreview (same single-MASK preview node)."
+      }
+    ],
+
+    "BOOLConstant": [
+      {
+        "to": "PrimitiveBoolean",
+        "note": "KJ boolean constant == core Primitive Boolean (single BOOLEAN passthrough)."
+      }
+    ],
+    "INTConstant": [
+      {
+        "to": "PrimitiveInt",
+        "note": "KJ int constant == core Primitive Int. Core adds a (fixed) control_after_generate; value is identical."
+      }
+    ],
+    "FloatConstant": [
+      {
+        "to": "PrimitiveFloat",
+        "note": "KJ float constant == core Primitive Float. KJ rounds to 6 decimals; negligible for a UI constant."
+      }
+    ],
+
+    "Convert Masks to Images": [
+      {
+        "to": "MaskToImage",
+        "note": "WAS mask->image == core MaskToImage (broadcast MASK to a 3-channel IMAGE).",
+        "inputs": { "masks": "mask" }
+      }
+    ],
+    "Mask Invert": [
+      {
+        "to": "InvertMask",
+        "note": "WAS mask invert == core InvertMask (1.0 - mask).",
+        "inputs": { "masks": "mask" }
+      }
+    ]
+  }
+}

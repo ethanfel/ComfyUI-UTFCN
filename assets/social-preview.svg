@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" font-family="'DejaVu Sans','Noto Sans',sans-serif">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#15161a"/>
+      <stop offset="1" stop-color="#202127"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.74" cy="0.42" r="0.6">
+      <stop offset="0" stop-color="#34d399" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#34d399" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="title" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#5be08a"/>
+      <stop offset="1" stop-color="#37c8c3"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1280" height="640" fill="url(#bg)"/>
+  <rect width="1280" height="640" fill="url(#glow)"/>
+  <rect x="8" y="8" width="1264" height="624" rx="28" fill="none" stroke="#34d399" stroke-opacity="0.22" stroke-width="2"/>
+
+  <!-- ==== left: text ==== -->
+  <text x="92" y="150" fill="#7f8797" font-size="24" letter-spacing="6" font-weight="600">COMFYUI · CUSTOM NODE</text>
+  <text x="86" y="286" fill="url(#title)" font-size="150" font-weight="800" letter-spacing="2">UTFCN</text>
+  <text x="92" y="346" fill="#e8eaed" font-size="46" font-weight="700">Use The Core Nodes</text>
+  <text x="92" y="402" fill="#9aa0ac" font-size="25">Spots custom nodes that re-implement core, and</text>
+  <text x="92" y="436" fill="#9aa0ac" font-size="25">replaces them with the built-in equivalent — safely.</text>
+
+  <!-- feature pills -->
+  <g font-size="22" font-weight="600" text-anchor="middle">
+    <rect x="92"  y="474" width="132" height="48" rx="24" fill="#34d399" fill-opacity="0.12" stroke="#34d399" stroke-opacity="0.45" stroke-width="2"/>
+    <text x="158" y="505" fill="#cfead9">Suggest</text>
+    <rect x="240" y="474" width="132" height="48" rx="24" fill="#34d399" fill-opacity="0.12" stroke="#34d399" stroke-opacity="0.45" stroke-width="2"/>
+    <text x="306" y="505" fill="#cfead9">Replace</text>
+    <rect x="388" y="474" width="176" height="48" rx="24" fill="#34d399" fill-opacity="0.12" stroke="#34d399" stroke-opacity="0.45" stroke-width="2"/>
+    <text x="476" y="505" fill="#cfead9">Force mode</text>
+  </g>
+
+  <text x="92" y="576" fill="#6f7684" font-size="23">github.com/ethanfel/ComfyUI-UTFCN</text>
+
+  <!-- ==== right: node-swap vignette ==== -->
+  <g>
+    <rect x="806" y="188" width="404" height="304" rx="30" fill="#ffffff" fill-opacity="0.03" stroke="#34d399" stroke-opacity="0.16" stroke-width="2"/>
+
+    <!-- custom node (amber) -->
+    <rect x="838" y="262" width="140" height="140" rx="20" fill="#e0a244" fill-opacity="0.12" stroke="#e0a244" stroke-width="7" stroke-linejoin="round"/>
+    <circle cx="978" cy="300" r="6" fill="#e0a244"/>
+    <circle cx="978" cy="364" r="6" fill="#e0a244"/>
+    <text x="908" y="442" fill="#e0a244" font-size="26" font-weight="700" text-anchor="middle">custom</text>
+
+    <!-- core node (green) -->
+    <rect x="1038" y="262" width="140" height="140" rx="20" fill="#34d399" fill-opacity="0.16" stroke="#5be08a" stroke-width="7" stroke-linejoin="round"/>
+    <path d="M1086 332 l16 17 l26 -33" fill="none" stroke="#5be08a" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="1108" y="442" fill="#5be08a" font-size="26" font-weight="700" text-anchor="middle">core</text>
+
+    <!-- swap arrows in the gap (custom -> core, core -> custom) -->
+    <g stroke="#e8eaed" stroke-width="8" stroke-linecap="round">
+      <line x1="984" y1="306" x2="1020" y2="306"/>
+      <line x1="1032" y1="358" x2="996" y2="358"/>
+    </g>
+    <path d="M1020 295 L1034 306 L1020 317 Z" fill="#e8eaed"/>
+    <path d="M996 347 L982 358 L996 369 Z" fill="#e8eaed"/>
+  </g>
+</svg>

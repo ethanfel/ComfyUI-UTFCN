@@ -1,0 +1,4 @@
+{
+  "_readme": "Your own curated equivalence rules — merged on top of mappings.json (yours win). Same schema; see mappings.json's _readme. This file is safe to keep across updates.",
+  "rules": {}
+}

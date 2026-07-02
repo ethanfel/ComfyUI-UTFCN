@@ -1,0 +1,15 @@
+[project]
+name = "comfyui-utfcn"
+description = "Use The F***ing Core Nodes — suggests core (or otherwise-available) equivalents for custom nodes, and replaces them across a workflow after a preview."
+version = "1.0.0"
+license = { text = "GPL-3.0-or-later" }
+dependencies = []
+
+[project.urls]
+Repository = "https://github.com/ethanfel/ComfyUI-UTFCN"
+Documentation = "https://github.com/ethanfel/ComfyUI-UTFCN#readme"
+
+[tool.comfy]
+PublisherId = "ethanfel"
+DisplayName = "UTFCN — Use The Core Nodes"
+Icon = "https://raw.githubusercontent.com/ethanfel/ComfyUI-UTFCN/main/assets/icon.png"

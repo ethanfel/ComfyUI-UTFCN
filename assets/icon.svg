@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#15161a"/>
+      <stop offset="1" stop-color="#202127"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.42" r="0.62">
+      <stop offset="0" stop-color="#34d399" stop-opacity="0.30"/>
+      <stop offset="1" stop-color="#34d399" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="256" height="256" rx="56" fill="url(#bg)"/>
+  <rect width="256" height="256" rx="56" fill="url(#glow)"/>
+  <rect x="6" y="6" width="244" height="244" rx="50" fill="none" stroke="#34d399" stroke-opacity="0.45" stroke-width="3"/>
+
+  <!-- custom node (amber) — the one being replaced -->
+  <rect x="30" y="92" width="60" height="72" rx="16" fill="#e0a244" fill-opacity="0.12" stroke="#e0a244" stroke-width="8" stroke-linejoin="round"/>
+  <circle cx="90" cy="112" r="5" fill="#e0a244"/>
+  <circle cx="90" cy="144" r="5" fill="#e0a244"/>
+
+  <!-- core node (green) — the replacement -->
+  <rect x="166" y="92" width="60" height="72" rx="16" fill="#34d399" fill-opacity="0.16" stroke="#5be08a" stroke-width="8" stroke-linejoin="round"/>
+  <path d="M181 129 l11 12 l18 -23" fill="none" stroke="#5be08a" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- swap arrows in the gap: custom -> core, core -> custom -->
+  <g stroke="#e8eaed" stroke-width="9" stroke-linecap="round">
+    <line x1="102" y1="112" x2="150" y2="112"/>
+    <line x1="154" y1="146" x2="106" y2="146"/>
+  </g>
+  <path d="M150 100 L166 112 L150 124 Z" fill="#e8eaed"/>
+  <path d="M106 134 L90 146 L106 158 Z" fill="#e8eaed"/>
+</svg>
