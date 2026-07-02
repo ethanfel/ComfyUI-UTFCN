@@ -2125,6 +2125,54 @@ RET.clear()
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
 
+    def test_getattr_return_types_mutation_after_mapping_skips_node(self):
+        source = '''
+class GetattrReturnTypesNode:
+    RETURN_TYPES = ["IMAGE"]
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "GetattrReturnTypesNode": GetattrReturnTypesNode,
+}
+getattr(GetattrReturnTypesNode, "RETURN_TYPES").clear()
+'''
+        result = self._extract_source(source, "getattr-return-types-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_globals_class_return_types_mutation_after_mapping_skips_node(self):
+        source = '''
+class GlobalsClassReturnTypesNode:
+    RETURN_TYPES = ["IMAGE"]
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "GlobalsClassReturnTypesNode": GlobalsClassReturnTypesNode,
+}
+globals()["GlobalsClassReturnTypesNode"].RETURN_TYPES.clear()
+'''
+        result = self._extract_source(source, "globals-class-return-types-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
     def test_module_class_tuple_alias_patch_after_mapping_skips_node(self):
         source = '''
 class TupleAliasPatchedNode:
@@ -2221,6 +2269,30 @@ NODE_CLASS_MAPPINGS = {
 NODE_CLASS_MAPPINGS.clear()
 '''
         result = self._extract_source(source, "mutated-mapping-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_globals_mutation_invalidates_static_node_mapping(self):
+        source = '''
+class GlobalMutatedMappingNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "GlobalMutatedMappingNode": GlobalMutatedMappingNode,
+}
+globals()["NODE_CLASS_MAPPINGS"].clear()
+'''
+        result = self._extract_source(source, "global-mutated-mapping-pack")
 
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])

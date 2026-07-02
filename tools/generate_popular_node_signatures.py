@@ -83,6 +83,20 @@ def _is_mutable_static_value(value):
     return isinstance(value, (dict, list, set))
 
 
+def _namespace_subscript_name(node):
+    if not isinstance(node, ast.Subscript):
+        return None
+    if not isinstance(node.value, ast.Call) or not isinstance(node.value.func, ast.Name):
+        return None
+    if node.value.func.id not in {"globals", "locals", "vars"}:
+        return None
+    if node.value.args or node.value.keywords:
+        return None
+    if isinstance(node.slice, ast.Constant) and isinstance(node.slice.value, str):
+        return node.slice.value
+    return None
+
+
 def _target_names(target):
     if isinstance(target, ast.Name):
         return {target.id}
@@ -93,23 +107,56 @@ def _target_names(target):
         return names
     if isinstance(target, ast.Starred):
         return _target_names(target.value)
-    if isinstance(target, (ast.Attribute, ast.Subscript)):
+    if isinstance(target, ast.Attribute):
+        return _target_names(target.value)
+    if isinstance(target, ast.Subscript):
+        name = _namespace_subscript_name(target)
+        if name is not None:
+            return {name}
         return _target_names(target.value)
     return set()
 
 
 def _root_name(node):
-    while isinstance(node, (ast.Attribute, ast.Subscript)):
+    while True:
+        name = _namespace_subscript_name(node)
+        if name is not None:
+            return name
+        if not isinstance(node, (ast.Attribute, ast.Subscript)):
+            break
         node = node.value
     if isinstance(node, ast.Name):
         return node.id
     return None
 
 
+def _getattr_signature_target_names(node):
+    if not isinstance(node, ast.Call):
+        return set()
+    if not isinstance(node.func, ast.Name) or node.func.id != "getattr":
+        return set()
+    if len(node.args) < 2:
+        return set()
+    name = _root_name(node.args[0])
+    if name is None:
+        return set()
+    attr = node.args[1]
+    if (
+        isinstance(attr, ast.Constant)
+        and isinstance(attr.value, str)
+        and attr.value not in _CLASS_SIGNATURE_ATTRS
+    ):
+        return set()
+    return {name}
+
+
 def _attribute_target_base_names(target):
     if isinstance(target, ast.Attribute):
         name = _root_name(target.value)
         return {name} if name else set()
+    names = _getattr_signature_target_names(target)
+    if names:
+        return names
     if isinstance(target, ast.Subscript):
         return _attribute_target_base_names(target.value)
     if isinstance(target, (ast.List, ast.Tuple)):
