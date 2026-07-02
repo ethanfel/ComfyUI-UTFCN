@@ -3880,6 +3880,58 @@ NODE_CLASS_MAPPINGS = {
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
 
+    def test_input_types_chained_alias_observed_by_arbitrary_call_skips_node(self):
+        source = '''
+class ChainedAliasObservedInputTypesNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+    A = B = INPUT_TYPES
+    observe(A)
+
+
+NODE_CLASS_MAPPINGS = {
+    "ChainedAliasObservedInputTypesNode": ChainedAliasObservedInputTypesNode,
+}
+'''
+        result = self._extract_source(source, "chained-alias-observed-input-types-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_input_types_chained_alias_used_as_callee_skips_node(self):
+        source = '''
+class ChainedAliasCalleeInputTypesNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+    A = B = INPUT_TYPES
+    A()
+
+
+NODE_CLASS_MAPPINGS = {
+    "ChainedAliasCalleeInputTypesNode": ChainedAliasCalleeInputTypesNode,
+}
+'''
+        result = self._extract_source(source, "chained-alias-callee-input-types-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
     def test_input_types_default_observed_by_arbitrary_call_skips_node(self):
         source = '''
 class DefaultObservedInputTypesNode:

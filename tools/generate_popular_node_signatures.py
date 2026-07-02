@@ -1172,6 +1172,18 @@ def _input_types(cls, env, decorator_env):
             classmethod_shadowed = True
         if isinstance(stmt, ast.Assign):
             target_names = _assignment_target_names(stmt)
+            if len(stmt.targets) > 1 and _input_types_alias_sources(stmt.value, aliases):
+                target_aliases = []
+                for target in stmt.targets:
+                    target_name = _alias_target_name(target)
+                    if target_name is None:
+                        value = _INVALID
+                        target_aliases = []
+                        break
+                    target_aliases.append(target_name)
+                aliases.update(alias for alias in target_aliases if alias != "INPUT_TYPES")
+                if "INPUT_TYPES" not in target_names:
+                    continue
             if (
                 len(stmt.targets) == 1
                 and isinstance(stmt.targets[0], ast.Name)
