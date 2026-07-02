@@ -1659,6 +1659,107 @@ NODE_CLASS_MAPPINGS = {
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
 
+    def test_class_body_locals_alias_return_types_setitem_skips_node(self):
+        source = '''
+class LocalsAliasReturnTypesNode:
+    RETURN_TYPES = ("IMAGE",)
+    ns = locals()
+    ns["RETURN_TYPES"] = ("MASK",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "LocalsAliasReturnTypesNode": LocalsAliasReturnTypesNode,
+}
+'''
+        result = self._extract_source(source, "locals-alias-return-types-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_class_body_vars_alias_return_types_update_skips_node(self):
+        source = '''
+class VarsAliasReturnTypesNode:
+    RETURN_TYPES = ("IMAGE",)
+    ns = vars()
+    ns.update(RETURN_TYPES=("MASK",))
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "VarsAliasReturnTypesNode": VarsAliasReturnTypesNode,
+}
+'''
+        result = self._extract_source(source, "vars-alias-return-types-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_class_body_chained_namespace_alias_return_types_setitem_skips_node(self):
+        source = '''
+class ChainedNamespaceAliasReturnTypesNode:
+    RETURN_TYPES = ("IMAGE",)
+    ns = other = locals()
+    other["RETURN_TYPES"] = ("MASK",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "ChainedNamespaceAliasReturnTypesNode": ChainedNamespaceAliasReturnTypesNode,
+}
+'''
+        result = self._extract_source(source, "chained-namespace-alias-return-types-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_class_body_namespace_alias_return_names_update_skips_node(self):
+        source = '''
+class NamespaceAliasReturnNamesNode:
+    RETURN_TYPES = ("IMAGE",)
+    RETURN_NAMES = ["image"]
+    ns = locals()
+    ns.update(RETURN_NAMES=["mask"])
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "NamespaceAliasReturnNamesNode": NamespaceAliasReturnNamesNode,
+}
+'''
+        result = self._extract_source(source, "namespace-alias-return-names-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
     def test_except_handler_binding_to_return_types_skips_node(self):
         source = '''
 class ExceptHandlerBoundReturnTypesNode:
@@ -4230,6 +4331,40 @@ NODE_CLASS_MAPPINGS = {
 }
 '''
         result = self._extract_source(source, "callee-observed-input-types-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_class_body_namespace_alias_input_types_patch_skips_node(self):
+        source = '''
+def build_inputs(cls):
+    return {
+        "required": {
+            "mask": ("MASK",),
+        },
+    }
+
+
+class NamespaceAliasInputTypesPatchNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+    ns = locals()
+    ns["INPUT_TYPES"] = build_inputs
+
+
+NODE_CLASS_MAPPINGS = {
+    "NamespaceAliasInputTypesPatchNode": NamespaceAliasInputTypesPatchNode,
+}
+'''
+        result = self._extract_source(source, "namespace-alias-input-types-patch-pack")
 
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])

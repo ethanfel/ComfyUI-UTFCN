@@ -933,6 +933,15 @@ def _class_body_module_mutation_names(cls):
     return names
 
 
+def _class_body_namespace_mutation_names(cls):
+    names = set()
+    namespace_aliases = set()
+    for stmt in cls.body:
+        names.update(_namespace_alias_mutation_target_names(stmt, namespace_aliases))
+        _update_namespace_aliases(stmt, namespace_aliases)
+    return names
+
+
 def _apply_module_stmt_to_env(stmt, env, class_bindings=None):
     names = _mutating_call_target_names(stmt)
     if isinstance(stmt, ast.ClassDef):
@@ -1165,6 +1174,9 @@ def _update_input_types_aliases_from_unpack(target, value, aliases):
 def _class_attr(cls, name, env):
     value = _MISSING
     aliases = set()
+    namespace_mutations = _class_body_namespace_mutation_names(cls)
+    if _name_invalidated_by(name, namespace_mutations):
+        return _INVALID
     for stmt in cls.body:
         mutating_targets = _mutating_call_target_names(stmt)
         observed_targets = _arbitrary_call_observed_names(stmt)
@@ -1295,6 +1307,9 @@ def _input_types(cls, env, decorator_env):
     value = _MISSING
     aliases = set()
     classmethod_shadowed = "classmethod" in decorator_env
+    namespace_mutations = _class_body_namespace_mutation_names(cls)
+    if _name_invalidated_by("INPUT_TYPES", namespace_mutations):
+        return None
     for stmt in cls.body:
         mutating_targets = _mutating_call_target_names(stmt)
         observed_targets = _arbitrary_call_observed_names(stmt)
