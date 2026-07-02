@@ -420,7 +420,7 @@ def _class_attr(cls, name, env):
         if name in _bound_names(stmt):
             value = _INVALID
     if value is _MISSING:
-        return None
+        return _MISSING
     if value is _INVALID:
         return _INVALID
     return value
@@ -558,8 +558,12 @@ def _signature_from_class(node_type, cls, display, pack_meta, env):
                 required.append(str(name))
 
     output_names = []
-    if isinstance(return_names, (list, tuple)):
+    if return_names is _MISSING:
+        output_names = []
+    elif isinstance(return_names, (list, tuple)):
         output_names = [str(name) for name in return_names]
+    else:
+        return None
 
     return {
         "type": node_type,

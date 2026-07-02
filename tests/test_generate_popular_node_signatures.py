@@ -743,6 +743,30 @@ NODE_CLASS_MAPPINGS = {
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
 
+    def test_string_return_names_declaration_skips_node(self):
+        source = '''
+class StringReturnNamesNode:
+    RETURN_TYPES = ("IMAGE",)
+    RETURN_NAMES = "image"
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "StringReturnNamesNode": StringReturnNamesNode,
+}
+'''
+        result = self._extract_source(source, "string-return-names-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
     def test_missing_return_names_is_allowed(self):
         source = '''
 class MissingReturnNamesNode:
