@@ -934,6 +934,30 @@ NODE_CLASS_MAPPINGS = {
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
 
+    def test_unhashable_literal_input_key_skips_repo_without_raising(self):
+        source = '''
+INPUTS = {
+    ["bad"]: ("IMAGE",),
+}
+
+
+class UnhashableLiteralInputKeyNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return INPUTS
+
+
+NODE_CLASS_MAPPINGS = {
+    "UnhashableLiteralInputKeyNode": UnhashableLiteralInputKeyNode,
+}
+'''
+        result = self._extract_source(source, "unhashable-literal-input-key-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
     def test_post_class_input_reassignment_skips_static_node(self):
         source = '''
 def build_inputs():
@@ -1057,6 +1081,28 @@ NODE_CLASS_MAPPINGS = {
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
 
+    def test_input_types_with_present_non_dict_sections_skips_node(self):
+        source = '''
+class InvalidInputSectionsNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": [],
+            "optional": None,
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "InvalidInputSectionsNode": InvalidInputSectionsNode,
+}
+'''
+        result = self._extract_source(source, "invalid-input-sections-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
     def test_dynamic_return_types_reassignment_skips_node(self):
         source = '''
 def build_outputs():
@@ -1153,6 +1199,32 @@ NODE_CLASS_MAPPINGS = {
 }
 '''
         result = self._extract_source(source, "rhs-mutated-return-types-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_function_default_walrus_to_return_types_skips_node(self):
+        source = '''
+class DefaultWalrusReturnTypesNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    def helper(self, x=(RETURN_TYPES := ("MASK",))):
+        pass
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "DefaultWalrusReturnTypesNode": DefaultWalrusReturnTypesNode,
+}
+'''
+        result = self._extract_source(source, "default-walrus-return-types-pack")
 
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
@@ -1840,6 +1912,31 @@ Alias = AliasPatchedNode
 Alias.RETURN_TYPES = ("MASK",)
 '''
         result = self._extract_source(source, "alias-patched-node-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_module_class_tuple_alias_patch_after_mapping_skips_node(self):
+        source = '''
+class TupleAliasPatchedNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "TupleAliasPatchedNode": TupleAliasPatchedNode,
+}
+Alias, = (TupleAliasPatchedNode,)
+Alias.RETURN_TYPES = ("MASK",)
+'''
+        result = self._extract_source(source, "tuple-alias-patched-node-pack")
 
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
