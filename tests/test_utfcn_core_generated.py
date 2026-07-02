@@ -115,5 +115,138 @@ class GeneratedSignatureLoaderTests(unittest.TestCase):
         self.assertEqual({}, dict(generated["by_out"]))
 
 
+class GeneratedSignatureMatchingTests(unittest.TestCase):
+    def _ctx(self, rules=None, generated=None):
+        live_sigs = {
+            "CoreImageSize": {
+                "inputs": {"image": "IMAGE"},
+                "required": {"image"},
+                "outputs": ["INT", "INT"],
+                "output_names": ["width", "height"],
+            },
+            "CoreMaskInvert": {
+                "inputs": {"mask": "MASK"},
+                "required": {"mask"},
+                "outputs": ["MASK"],
+                "output_names": ["mask"],
+            },
+            "CuratedTarget": {
+                "inputs": {"image": "IMAGE"},
+                "required": {"image"},
+                "outputs": ["INT", "INT"],
+                "output_names": ["width", "height"],
+            },
+        }
+        sources = {
+            "CoreImageSize": {"source": "core", "pack": "nodes", "display": "Core Image Size"},
+            "CoreMaskInvert": {"source": "core", "pack": "nodes", "display": "Core Mask Invert"},
+            "CuratedTarget": {"source": "core", "pack": "nodes", "display": "Curated Target"},
+        }
+        by_out = utfcn_core.defaultdict(list)
+        for name, sig in live_sigs.items():
+            by_out[sig["outputs"][0]].append(name)
+        return {
+            "sources": sources,
+            "sigs": live_sigs,
+            "by_out": by_out,
+            "rules": rules or {},
+            "generated": generated or utfcn_core._empty_generated_signatures(),
+        }
+
+    def test_generated_exact_signature_matches_missing_node_as_verified(self):
+        generated = utfcn_core._empty_generated_signatures()
+        generated["sigs"]["SampleImageSize"] = {
+            "inputs": {"image": "IMAGE"},
+            "required": {"image"},
+            "outputs": ["INT", "INT"],
+            "output_names": ["width", "height"],
+        }
+        generated["meta"]["SampleImageSize"] = {
+            "source": "generated",
+            "pack": "sample-pack",
+            "display": "Sample Image Size",
+            "repository": "https://github.com/example/sample-pack",
+            "confidence": "static_exact",
+        }
+        generated["by_out"]["INT"].append("SampleImageSize")
+
+        result = utfcn_core.match(self._ctx(generated=generated), [{"type": "SampleImageSize"}])
+
+        self.assertEqual("CoreImageSize", result["SampleImageSize"][0]["to"])
+        self.assertEqual("exact", result["SampleImageSize"][0]["tier"])
+        self.assertTrue(result["SampleImageSize"][0]["verified"])
+
+    def test_curated_rule_stays_first_before_generated_exact_match(self):
+        generated = utfcn_core._empty_generated_signatures()
+        generated["sigs"]["SampleImageSize"] = {
+            "inputs": {"image": "IMAGE"},
+            "required": {"image"},
+            "outputs": ["INT", "INT"],
+            "output_names": ["width", "height"],
+        }
+        generated["meta"]["SampleImageSize"] = {
+            "source": "generated",
+            "pack": "sample-pack",
+            "display": "Sample Image Size",
+            "repository": "https://github.com/example/sample-pack",
+            "confidence": "static_exact",
+        }
+        generated["by_out"]["INT"].append("SampleImageSize")
+        rules = {
+            "SampleImageSize": [
+                {
+                    "to": "CuratedTarget",
+                    "note": "Curated replacement wins over generated exact signature.",
+                }
+            ]
+        }
+
+        result = utfcn_core.match(self._ctx(rules=rules, generated=generated), [{"type": "SampleImageSize"}])
+
+        self.assertEqual("CuratedTarget", result["SampleImageSize"][0]["to"])
+        self.assertEqual("curated", result["SampleImageSize"][0]["tier"])
+        self.assertTrue(result["SampleImageSize"][0]["verified"])
+
+    def test_generated_partial_signature_matches_but_is_not_verified(self):
+        generated = utfcn_core._empty_generated_signatures()
+        generated["sigs"]["SampleMaskInvert"] = {
+            "inputs": {"masks": "MASK"},
+            "required": {"masks"},
+            "outputs": ["MASK"],
+            "output_names": ["mask"],
+        }
+        generated["meta"]["SampleMaskInvert"] = {
+            "source": "generated",
+            "pack": "sample-pack",
+            "display": "Sample Mask Invert",
+            "repository": "https://github.com/example/sample-pack",
+            "confidence": "static_exact",
+        }
+        generated["by_out"]["MASK"].append("SampleMaskInvert")
+
+        result = utfcn_core.match(self._ctx(generated=generated), [{"type": "SampleMaskInvert"}])
+
+        self.assertEqual("CoreMaskInvert", result["SampleMaskInvert"][0]["to"])
+        self.assertEqual("partial", result["SampleMaskInvert"][0]["tier"])
+        self.assertFalse(result["SampleMaskInvert"][0]["verified"])
+
+    def test_serialized_signature_fallback_still_handles_unknown_generated_node(self):
+        result = utfcn_core.match(
+            self._ctx(),
+            [
+                {
+                    "type": "SerializedMaskInvert",
+                    "inputs": {"masks": "MASK"},
+                    "outputs": ["MASK"],
+                    "output_names": ["mask"],
+                }
+            ],
+        )
+
+        self.assertEqual("CoreMaskInvert", result["SerializedMaskInvert"][0]["to"])
+        self.assertEqual("partial", result["SerializedMaskInvert"][0]["tier"])
+        self.assertFalse(result["SerializedMaskInvert"][0]["verified"])
+
+
 if __name__ == "__main__":
     unittest.main()

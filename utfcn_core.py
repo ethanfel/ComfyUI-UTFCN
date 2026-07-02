@@ -231,7 +231,7 @@ def load_rules(base_dir):
     return merged
 
 
-def build_context(rules):
+def build_context(rules, generated=None):
     """
     Snapshot the live node registry once (signatures + source of every node).
 
@@ -258,7 +258,13 @@ def build_context(rules):
     for name in classes:
         by_out[_first_output_type(sigs[name])].append(name)
 
-    return {"sources": sources, "sigs": sigs, "by_out": by_out, "rules": rules}
+    return {
+        "sources": sources,
+        "sigs": sigs,
+        "by_out": by_out,
+        "rules": rules,
+        "generated": generated or _empty_generated_signatures(),
+    }
 
 
 def _candidates_for(src_name, src_sig, src_pack, ctx):
@@ -363,15 +369,29 @@ def match(ctx, items):
 
     `items`: [ {"type": str, "inputs": {name: TYPE}, "outputs": [TYPE], "output_names": [..]} ].
     Serialized nodes only carry link slots (not widget values), so 'exact' rarely
-    fires; curated rules (by type name) and 'partial' link-type matches do.
+    fires; curated rules (by type name), bundled generated signatures, and
+    partial link-type matches do.
 
-    Returns { type: [candidate, ...] }.
+    Returns a mapping from source node type to candidate list.
     """
     out = {}
+    generated = ctx.get("generated") or _empty_generated_signatures()
+    generated_sigs = generated.get("sigs") or {}
+    generated_meta = generated.get("meta") or {}
+
     for it in items:
         t = it.get("type")
         if not t or t in out:
             continue
+
+        gen_sig = generated_sigs.get(t)
+        if gen_sig is not None:
+            gen_pack = (generated_meta.get(t) or {}).get("pack")
+            found = _candidates_for(t, gen_sig, gen_pack, ctx)
+            if found:
+                out[t] = found
+                continue
+
         inputs = {k: str(v) for k, v in (it.get("inputs") or {}).items()}
         sig = {
             "inputs": inputs,

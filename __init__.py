@@ -39,7 +39,9 @@ _INDEX_CACHE = None
 def _get_ctx(refresh=False):
     global _CTX_CACHE
     if refresh or _CTX_CACHE is None:
-        _CTX_CACHE = utfcn_core.build_context(utfcn_core.load_rules(_DIR))
+        rules = utfcn_core.load_rules(_DIR)
+        generated = utfcn_core.load_generated_signatures(_DIR)
+        _CTX_CACHE = utfcn_core.build_context(rules, generated)
     return _CTX_CACHE
 
 
