@@ -398,6 +398,10 @@ def _class_defs(tree):
     return {node.name: node for node in tree.body if isinstance(node, ast.ClassDef)}
 
 
+def _is_mutable_env_reference(node, env):
+    return isinstance(node, ast.Name) and node.id in env and _is_mutable_static_value(env[node.id])
+
+
 def _class_attr(cls, name, env):
     value = _MISSING
     aliases = set()
@@ -419,10 +423,13 @@ def _class_attr(cls, name, env):
             if name not in target_names:
                 continue
             if len(stmt.targets) == 1 and isinstance(stmt.targets[0], ast.Name):
-                try:
-                    value = _literal(stmt.value, env)
-                except UnsupportedStaticExpression:
+                if _is_mutable_env_reference(stmt.value, env):
                     value = _INVALID
+                else:
+                    try:
+                        value = _literal(stmt.value, env)
+                    except UnsupportedStaticExpression:
+                        value = _INVALID
             else:
                 value = _INVALID
             continue
@@ -446,10 +453,13 @@ def _class_attr(cls, name, env):
             if not isinstance(stmt.target, ast.Name):
                 value = _INVALID
             else:
-                try:
-                    value = _literal(stmt.value, env)
-                except UnsupportedStaticExpression:
+                if _is_mutable_env_reference(stmt.value, env):
                     value = _INVALID
+                else:
+                    try:
+                        value = _literal(stmt.value, env)
+                    except UnsupportedStaticExpression:
+                        value = _INVALID
             continue
         if isinstance(stmt, ast.AugAssign):
             target_names = _assignment_target_names(stmt)

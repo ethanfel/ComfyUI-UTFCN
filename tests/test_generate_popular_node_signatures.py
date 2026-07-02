@@ -855,6 +855,63 @@ NODE_CLASS_MAPPINGS = {
         self.assertEqual(["IMAGE"], result["nodes"]["DefinitionTimeReturnTypesNode"]["outputs"])
         self.assertEqual("ok", result["pack"]["status"])
 
+    def test_mutable_module_return_types_capture_skips_node(self):
+        source = '''
+RETURNS = ["IMAGE"]
+
+
+class MutableModuleReturnTypesNode:
+    RETURN_TYPES = RETURNS
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+RETURNS.clear()
+
+NODE_CLASS_MAPPINGS = {
+    "MutableModuleReturnTypesNode": MutableModuleReturnTypesNode,
+}
+'''
+        result = self._extract_source(source, "mutable-module-return-types-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_mutable_module_return_names_capture_skips_node(self):
+        source = '''
+NAMES = ["image"]
+
+
+class MutableModuleReturnNamesNode:
+    RETURN_TYPES = ("IMAGE",)
+    RETURN_NAMES = NAMES
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NAMES.clear()
+
+NODE_CLASS_MAPPINGS = {
+    "MutableModuleReturnNamesNode": MutableModuleReturnNamesNode,
+}
+'''
+        result = self._extract_source(source, "mutable-module-return-names-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
     def test_subscript_assignment_to_return_types_skips_node(self):
         source = '''
 class SubscriptMutatedReturnTypesNode:
