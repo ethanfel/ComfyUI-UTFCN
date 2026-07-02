@@ -260,6 +260,49 @@ NODE_CLASS_MAPPINGS = {
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
 
+    def test_duplicate_node_id_with_unsupported_mapping_value_skips_static_node(self):
+        source_a = '''
+class StaticDupNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "DupNode": StaticDupNode,
+}
+'''
+        source_b = '''
+def build_node():
+    return object()
+
+
+NODE_CLASS_MAPPINGS = {
+    "DupNode": build_node(),
+}
+'''
+        with tempfile.TemporaryDirectory() as tmp:
+            Path(tmp, "a.py").write_text(textwrap.dedent(source_a), encoding="utf-8")
+            Path(tmp, "b.py").write_text(textwrap.dedent(source_b), encoding="utf-8")
+            result = extract_repo_signatures(
+                Path(tmp),
+                {
+                    "id": "unsupported-duplicate-node-pack",
+                    "title": "Unsupported Duplicate Node Pack",
+                    "repository": "https://github.com/example/unsupported-duplicate-node-pack",
+                    "rank": 1,
+                },
+            )
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
     def test_unsupported_reassignment_invalidates_static_env_value(self):
         source = '''
 def build_inputs():
@@ -763,6 +806,33 @@ NODE_CLASS_MAPPINGS = {
 }
 '''
         result = self._extract_source(source, "rhs-mutated-input-env-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_arbitrary_call_observing_mutable_env_value_invalidates_static_env_value(self):
+        source = '''
+INPUTS = {
+    "required": {
+        "image": ("IMAGE",),
+    },
+}
+observe(INPUTS)
+
+
+class ObservedInputEnvNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return INPUTS
+
+
+NODE_CLASS_MAPPINGS = {
+    "ObservedInputEnvNode": ObservedInputEnvNode,
+}
+'''
+        result = self._extract_source(source, "observed-input-env-pack")
 
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
@@ -1681,6 +1751,30 @@ NODE_CLASS_MAPPINGS = {
 }
 '''
         result = self._extract_source(source, "alias-arbitrary-call-return-types-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_return_types_used_as_callee_skips_node(self):
+        source = '''
+class CalleeObservedReturnTypesNode:
+    RETURN_TYPES = ["IMAGE"]
+    RETURN_TYPES()
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "CalleeObservedReturnTypesNode": CalleeObservedReturnTypesNode,
+}
+'''
+        result = self._extract_source(source, "callee-observed-return-types-pack")
 
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
@@ -3731,6 +3825,31 @@ NODE_CLASS_MAPPINGS = {
 }
 '''
         result = self._extract_source(source, "observed-input-types-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_input_types_used_as_callee_skips_node(self):
+        source = '''
+class CalleeObservedInputTypesNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+    INPUT_TYPES()
+
+
+NODE_CLASS_MAPPINGS = {
+    "CalleeObservedInputTypesNode": CalleeObservedInputTypesNode,
+}
+'''
+        result = self._extract_source(source, "callee-observed-input-types-pack")
 
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])

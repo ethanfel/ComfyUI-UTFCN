@@ -635,6 +635,7 @@ def _arbitrary_call_observed_names(stmt):
             self.visit(node.args)
 
         def visit_Call(self, node):
+            names.update(_referenced_names(node.func))
             if isinstance(node.func, ast.Attribute):
                 names.update(_referenced_names(node.func.value))
             for arg in node.args:
@@ -779,6 +780,10 @@ def _apply_module_stmt_to_env(stmt, env, class_bindings=None):
     else:
         _invalidate_class_bindings(class_bindings, names)
         _invalidate_env_names(env, names)
+    observed_names = _arbitrary_call_observed_names(stmt)
+    for name in observed_names:
+        if name in env and _is_mutable_static_value(env[name]):
+            _invalidate_env_name(env, name)
     if isinstance(stmt, ast.ClassDef):
         if class_bindings is not None:
             if _is_trivially_safe_class_def(stmt):
@@ -1782,6 +1787,19 @@ def _node_class_mappings(tree):
     return {node_type: binding for node_type, (_class_name, binding) in mappings.items() if node_type}
 
 
+def _node_class_mapping_keys(tree):
+    if _has_module_wildcard_import(tree):
+        return set()
+    mappings = _final_module_dict(
+        tree,
+        "NODE_CLASS_MAPPINGS",
+        lambda _value, _env, _class_bindings: True,
+    )
+    if not all(isinstance(node_type, str) for node_type in mappings):
+        return set()
+    return {node_type for node_type in mappings if node_type}
+
+
 def _display_mappings(tree):
     displays = _final_module_dict(
         tree,
@@ -1880,7 +1898,15 @@ def extract_repo_signatures(repo_dir, pack_meta):
             continue
         env = _collect_module_env(tree)
         mappings = _node_class_mappings(tree)
+        mapping_node_types = _node_class_mapping_keys(tree)
         displays = _display_mappings(tree)
+        for node_type in sorted(mapping_node_types):
+            prior_path = node_sources.get(node_type)
+            if prior_path is not None and prior_path != path:
+                duplicate_node_types.add(node_type)
+                nodes.pop(node_type, None)
+                continue
+            node_sources.setdefault(node_type, path)
         if displays is _INVALID:
             continue
         for node_type, binding in sorted(mappings.items()):
