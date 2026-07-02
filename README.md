@@ -34,6 +34,15 @@ Both "Replace…" and the right-click item work on them; the bulk dialog labels
 them `⚠ not installed`. (Widget values aren't carried for a node whose
 definition you don't have — links are.)
 
+### Popular missing-node signatures
+
+UTFCN ships a generated `popular_node_signatures.json` artifact built from
+ComfyUI-Manager metadata and static scans of public GitHub repos.
+The file helps match common missing nodes by their real node signatures even
+when the original pack is not installed. It is loaded locally at ComfyUI startup;
+UTFCN does not contact GitHub, ComfyUI-Manager, or the Registry while you use the
+editor.
+
 ## How it decides what's equivalent
 
 The backend reads the live node registry (real `INPUT_TYPES` / `RETURN_TYPES`
@@ -48,9 +57,11 @@ and each node's source module) and ranks candidates in three tiers:
 "Available" means core is preferred, and if there's no core match it will offer
 an equivalent from a **different installed pack** as a fallback.
 
-For an **uninstalled** node only *curated* (by name) and *partial* (by its
-serialized link signature) can apply — the exact tier needs the widget-level
-signature, which a node you haven't installed can't provide.
+For an **uninstalled** node, UTFCN tries curated rules by name first, then any
+bundled generated signature for that node type, then the serialized link
+signature preserved in the workflow. Generated exact signatures can produce
+verified exact matches, but name-only metadata never can; loose structural
+matches remain suggestions.
 
 ## Shipped equivalences
 
@@ -104,6 +115,19 @@ equivalent:**
   Force only ever applies **verified** matches (curated or exact-signature); it
   never auto-applies a heuristic guess, and it never fires while you're opening
   or importing a workflow — only on nodes *you* add. Undo with Ctrl+Z.
+
+## Refreshing the generated popular-node artifact
+
+Maintainers can refresh the bundled signature artifact with:
+
+```bash
+python tools/generate_popular_node_signatures.py --limit 1000 --output popular_node_signatures.json --cache-dir /tmp/utfcn-popular-node-repos
+```
+
+The generator uses only Python's standard library plus `git`. It parses custom
+node repositories statically with `ast`; it does not import or execute the
+downloaded node code. Repositories with dynamic signatures are skipped until a
+parser case exists for them.
 
 ## Install
 
