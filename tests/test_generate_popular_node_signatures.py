@@ -1946,6 +1946,30 @@ NODE_CLASS_MAPPINGS = {
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
 
+    def test_class_with_type_params_mapping_skips_node(self):
+        source = '''
+class TypeParamNode[T]:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "TypeParamNode": TypeParamNode,
+}
+'''
+        self._skip_if_syntax_unsupported(source)
+        result = self._extract_source(source, "type-param-class-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
     def test_node_mapping_key_uses_assignment_time_env(self):
         source = '''
 KEY = "Original"
