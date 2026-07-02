@@ -1569,9 +1569,13 @@ NODE_CLASS_MAPPINGS = {
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
 
-    def test_direct_literal_input_types_survives_post_class_env_changes(self):
+    def test_direct_literal_input_types_survives_post_class_literal_env_changes(self):
         source = '''
-INPUTS = build_inputs()
+INPUTS = {
+    "required": {
+        "mask": ("MASK",),
+    },
+}
 
 
 class LiteralInputTypesAfterEnvChangeNode:
@@ -1586,7 +1590,11 @@ class LiteralInputTypesAfterEnvChangeNode:
         }
 
 
-INPUTS = build_inputs()
+INPUTS = {
+    "required": {
+        "latent": ("LATENT",),
+    },
+}
 
 NODE_CLASS_MAPPINGS = {
     "LiteralInputTypesAfterEnvChangeNode": LiteralInputTypesAfterEnvChangeNode,
@@ -1735,6 +1743,32 @@ NODE_CLASS_MAPPINGS = {
 }
 '''
         result = self._extract_source(source, "shadowed-classmethod-input-types-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_arbitrary_call_before_classmethod_decorator_skips_node(self):
+        source = '''
+mutate()
+
+
+class MutatedClassmethodDecoratorNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "MutatedClassmethodDecoratorNode": MutatedClassmethodDecoratorNode,
+}
+'''
+        result = self._extract_source(source, "mutated-classmethod-decorator-pack")
 
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
@@ -4461,6 +4495,31 @@ NODE_CLASS_MAPPINGS = {
 mutate()
 '''
         result = self._extract_source(source, "no-arg-mapping-call-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_assignment_arbitrary_call_before_node_mapping_skips_node(self):
+        source = '''
+class AssignmentCallBeforeMappingNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+x = mutate()
+
+NODE_CLASS_MAPPINGS = {
+    "AssignmentCallBeforeMappingNode": AssignmentCallBeforeMappingNode,
+}
+'''
+        result = self._extract_source(source, "assignment-call-before-mapping-pack")
 
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])

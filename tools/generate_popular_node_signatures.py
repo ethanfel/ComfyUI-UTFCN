@@ -1054,9 +1054,8 @@ def _apply_module_stmt_to_env(stmt, env, class_bindings=None):
             _invalidate_env_name(env, name)
     if _has_arbitrary_call(stmt):
         env.clear()
-        if class_bindings is not None and not isinstance(
-            stmt, (ast.Assign, ast.AnnAssign, ast.AugAssign, ast.Delete)
-        ):
+        _invalidate_env_name(env, "classmethod")
+        if class_bindings is not None:
             class_bindings.clear()
     if isinstance(stmt, ast.ClassDef):
         if class_bindings is not None:
