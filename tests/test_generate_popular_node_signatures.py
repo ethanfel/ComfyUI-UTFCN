@@ -590,6 +590,34 @@ NODE_CLASS_MAPPINGS = {
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
 
+    def test_nested_mutable_env_literal_skips_static_node(self):
+        source = '''
+REQ = {
+    "image": ("IMAGE",),
+}
+INPUTS = {
+    "required": REQ,
+}
+REQ.clear()
+
+
+class NestedMutableEnvLiteralNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return INPUTS
+
+
+NODE_CLASS_MAPPINGS = {
+    "NestedMutableEnvLiteralNode": NestedMutableEnvLiteralNode,
+}
+'''
+        result = self._extract_source(source, "nested-mutable-env-literal-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
     def test_post_class_input_reassignment_skips_static_node(self):
         source = '''
 def build_inputs():
@@ -649,6 +677,36 @@ NODE_CLASS_MAPPINGS = {
 
         self.assertIn("LiteralInputTypesAfterEnvChangeNode", result["nodes"])
         self.assertEqual("ok", result["pack"]["status"])
+
+    def test_later_dynamic_input_types_binding_skips_node(self):
+        source = '''
+def build_inputs():
+    return {"required": {"mask": ("MASK",)}}
+
+
+class LaterDynamicInputTypesNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+    def INPUT_TYPES(cls):
+        return build_inputs()
+
+
+NODE_CLASS_MAPPINGS = {
+    "LaterDynamicInputTypesNode": LaterDynamicInputTypesNode,
+}
+'''
+        result = self._extract_source(source, "later-dynamic-input-types-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
 
     def test_dynamic_return_types_reassignment_skips_node(self):
         source = '''
@@ -823,6 +881,32 @@ NODE_CLASS_MAPPINGS = {
 }
 '''
         result = self._extract_source(source, "alias-subscript-mutated-return-names-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_return_types_transitive_alias_mutation_skips_node(self):
+        source = '''
+class TransitiveAliasMutatedReturnTypesNode:
+    RETURN_TYPES = ["IMAGE"]
+    A = RETURN_TYPES
+    B = A
+    B.clear()
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "TransitiveAliasMutatedReturnTypesNode": TransitiveAliasMutatedReturnTypesNode,
+}
+'''
+        result = self._extract_source(source, "transitive-alias-mutated-return-types-pack")
 
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
