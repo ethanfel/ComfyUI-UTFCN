@@ -283,9 +283,11 @@ def _has_module_wildcard_import(tree):
     return False
 
 
-def _collect_module_env(tree):
+def _collect_module_env(tree, class_envs=None):
     env = {}
     for stmt in tree.body:
+        if class_envs is not None and isinstance(stmt, ast.ClassDef):
+            class_envs[stmt.name] = dict(env)
         if isinstance(stmt, ast.Assign):
             names = _assignment_target_names(stmt)
             if len(stmt.targets) == 1 and isinstance(stmt.targets[0], ast.Name):
@@ -372,7 +374,7 @@ def _class_attr(cls, name, env):
     value = _MISSING
     for stmt in cls.body:
         if isinstance(stmt, ast.Assign):
-            if not any(isinstance(target, ast.Name) and target.id == name for target in stmt.targets):
+            if name not in _assignment_target_names(stmt):
                 continue
             if len(stmt.targets) == 1 and isinstance(stmt.targets[0], ast.Name):
                 try:
@@ -383,17 +385,20 @@ def _class_attr(cls, name, env):
                 value = _INVALID
             continue
         if isinstance(stmt, ast.AnnAssign):
-            if not isinstance(stmt.target, ast.Name) or stmt.target.id != name:
+            if name not in _assignment_target_names(stmt):
                 continue
-            if stmt.value is None:
+            if isinstance(stmt.target, ast.Name) and stmt.value is None:
                 continue
-            try:
-                value = _literal(stmt.value, env)
-            except UnsupportedStaticExpression:
+            if not isinstance(stmt.target, ast.Name):
                 value = _INVALID
+            else:
+                try:
+                    value = _literal(stmt.value, env)
+                except UnsupportedStaticExpression:
+                    value = _INVALID
             continue
         if isinstance(stmt, ast.AugAssign):
-            if isinstance(stmt.target, ast.Name) and stmt.target.id == name:
+            if name in _assignment_target_names(stmt):
                 value = _INVALID
             continue
         if isinstance(stmt, ast.Delete):
@@ -589,7 +594,8 @@ def extract_repo_signatures(repo_dir, pack_meta):
         tree = _parse_python_file(path)
         if tree is None:
             continue
-        env = _collect_module_env(tree)
+        class_envs = {}
+        env = _collect_module_env(tree, class_envs)
         mappings = _node_class_mappings(tree, env)
         displays = _display_mappings(tree, env)
         classes = _class_defs(tree)
@@ -597,7 +603,8 @@ def extract_repo_signatures(repo_dir, pack_meta):
             cls = classes.get(class_name)
             if cls is None:
                 continue
-            sig = _signature_from_class(node_type, cls, displays.get(node_type), pack_meta, env)
+            class_env = class_envs.get(class_name, env)
+            sig = _signature_from_class(node_type, cls, displays.get(node_type), pack_meta, class_env)
             if sig is not None:
                 nodes[node_type] = sig
 

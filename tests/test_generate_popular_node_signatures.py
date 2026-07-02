@@ -666,6 +666,58 @@ NODE_CLASS_MAPPINGS = {
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
 
+    def test_class_return_types_uses_definition_time_module_env(self):
+        source = '''
+RETURNS = ("IMAGE",)
+
+
+class DefinitionTimeReturnTypesNode:
+    RETURN_TYPES = RETURNS
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+RETURNS = ("MASK",)
+
+NODE_CLASS_MAPPINGS = {
+    "DefinitionTimeReturnTypesNode": DefinitionTimeReturnTypesNode,
+}
+'''
+        result = self._extract_source(source, "definition-time-return-pack")
+
+        self.assertEqual(["IMAGE"], result["nodes"]["DefinitionTimeReturnTypesNode"]["outputs"])
+        self.assertEqual("ok", result["pack"]["status"])
+
+    def test_subscript_assignment_to_return_types_skips_node(self):
+        source = '''
+class SubscriptMutatedReturnTypesNode:
+    RETURN_TYPES = ["IMAGE"]
+    RETURN_TYPES[0] = "MASK"
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "SubscriptMutatedReturnTypesNode": SubscriptMutatedReturnTypesNode,
+}
+'''
+        result = self._extract_source(source, "subscript-mutated-return-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
     def test_final_static_return_types_assignment_wins(self):
         source = '''
 class FinalReturnTypesNode:
