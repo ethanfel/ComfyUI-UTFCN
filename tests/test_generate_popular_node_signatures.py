@@ -2532,6 +2532,55 @@ RET.clear()
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
 
+    def test_module_class_attribute_arbitrary_call_after_mapping_skips_node(self):
+        source = '''
+class ObserveAttributeCallNode:
+    RETURN_TYPES = ["IMAGE"]
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "ObserveAttributeCallNode": ObserveAttributeCallNode,
+}
+mutate(ObserveAttributeCallNode.RETURN_TYPES)
+'''
+        result = self._extract_source(source, "observe-attribute-call-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_module_class_attribute_alias_arbitrary_call_after_mapping_skips_node(self):
+        source = '''
+class ObserveAttributeAliasCallNode:
+    RETURN_TYPES = ["IMAGE"]
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "ObserveAttributeAliasCallNode": ObserveAttributeAliasCallNode,
+}
+RET = ObserveAttributeAliasCallNode.RETURN_TYPES
+mutate(RET)
+'''
+        result = self._extract_source(source, "observe-attribute-alias-call-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
     def test_getattr_return_types_mutation_after_mapping_skips_node(self):
         source = '''
 class GetattrReturnTypesNode:
