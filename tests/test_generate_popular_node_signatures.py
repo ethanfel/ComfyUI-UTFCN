@@ -1486,6 +1486,31 @@ NODE_CLASS_MAPPINGS = {
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
 
+    def test_return_types_chained_alias_mutation_skips_node(self):
+        source = '''
+class ChainedAliasMutatedReturnTypesNode:
+    RETURN_TYPES = ["IMAGE"]
+    A = B = RETURN_TYPES
+    A.append("MASK")
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "ChainedAliasMutatedReturnTypesNode": ChainedAliasMutatedReturnTypesNode,
+}
+'''
+        result = self._extract_source(source, "chained-alias-mutated-return-types-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
     def test_return_types_unpacked_alias_mutation_skips_node(self):
         source = '''
 class UnpackedAliasMutatedReturnTypesNode:
@@ -2446,6 +2471,31 @@ Alias.RETURN_TYPES = ("MASK",)
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
 
+    def test_module_class_chained_alias_patch_after_mapping_skips_node(self):
+        source = '''
+class ChainedAliasPatchedNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "ChainedAliasPatchedNode": ChainedAliasPatchedNode,
+}
+A = B = ChainedAliasPatchedNode
+A.RETURN_TYPES = ("MASK",)
+'''
+        result = self._extract_source(source, "chained-alias-patched-node-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
     def test_module_class_starred_alias_patch_after_mapping_skips_node(self):
         source = '''
 class StarredAliasPatchedNode:
@@ -2618,6 +2668,32 @@ NODE_CLASS_MAPPINGS = {
 }
 '''
         result = self._extract_source(source, "pre-mapping-attribute-alias-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_module_class_attribute_chained_alias_mutation_skips_node(self):
+        source = '''
+class ChainedAttributeAliasNode:
+    RETURN_TYPES = ["IMAGE"]
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+A = B = ChainedAttributeAliasNode.RETURN_TYPES
+A.append("MASK")
+
+NODE_CLASS_MAPPINGS = {
+    "ChainedAttributeAliasNode": ChainedAttributeAliasNode,
+}
+'''
+        result = self._extract_source(source, "chained-attribute-alias-pack")
 
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])

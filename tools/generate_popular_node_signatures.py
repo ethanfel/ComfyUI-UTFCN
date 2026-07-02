@@ -1009,6 +1009,18 @@ def _class_attr(cls, name, env):
             value = _INVALID
         if isinstance(stmt, ast.Assign):
             target_names = _assignment_target_names(stmt)
+            if len(stmt.targets) > 1 and _class_attr_alias_sources(stmt.value, name, aliases):
+                target_aliases = []
+                for target in stmt.targets:
+                    target_name = _alias_target_name(target)
+                    if target_name is None:
+                        value = _INVALID
+                        target_aliases = []
+                        break
+                    target_aliases.append(target_name)
+                aliases.update(alias for alias in target_aliases if alias != name)
+                if name not in target_names:
+                    continue
             if (
                 len(stmt.targets) == 1
                 and isinstance(stmt.targets[0], ast.Name)
@@ -1290,6 +1302,13 @@ def _update_class_aliases(stmt, class_aliases, class_bindings):
         sources = _class_alias_sources(stmt.value, class_aliases, class_bindings)
         if sources:
             class_aliases[stmt.targets[0].id] = sources
+    elif isinstance(stmt, ast.Assign) and len(stmt.targets) > 1:
+        sources = _class_alias_sources(stmt.value, class_aliases, class_bindings)
+        if sources:
+            for target in stmt.targets:
+                target_name = _alias_target_name(target)
+                if target_name is not None:
+                    class_aliases[target_name] = sources
     elif isinstance(stmt, ast.Assign) and len(stmt.targets) == 1:
         _update_class_alias_from_unpack(stmt.targets[0], stmt.value, class_aliases, class_bindings)
     elif isinstance(stmt, ast.AnnAssign) and isinstance(stmt.target, ast.Name) and stmt.value is not None:
@@ -1387,6 +1406,18 @@ def _update_class_attribute_aliases(stmt, class_attribute_aliases, class_aliases
         )
         if sources:
             class_attribute_aliases[stmt.targets[0].id] = sources
+    elif isinstance(stmt, ast.Assign) and len(stmt.targets) > 1:
+        sources = _class_attribute_alias_sources(
+            stmt.value,
+            class_attribute_aliases,
+            class_aliases,
+            class_bindings,
+        )
+        if sources:
+            for target in stmt.targets:
+                target_name = _alias_target_name(target)
+                if target_name is not None:
+                    class_attribute_aliases[target_name] = sources
     elif isinstance(stmt, ast.Assign) and len(stmt.targets) == 1:
         _update_class_attribute_alias_from_unpack(
             stmt.targets[0],
