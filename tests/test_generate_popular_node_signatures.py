@@ -16,6 +16,7 @@ from tools.generate_popular_node_signatures import (
     main,
     normalise_input_spec,
     normalise_manager_entries,
+    rank_entries,
     rank_packs,
     repo_cache_path,
     write_artifact,
@@ -5649,6 +5650,39 @@ class ManagerIngestionTests(unittest.TestCase):
         ranked = rank_packs(packs)
 
         self.assertEqual(["many-downloads", "many-stars"], [pack["id"] for pack in ranked])
+
+    def test_rank_entries_reads_top_level_popularity_fields(self):
+        entries = [
+            {
+                "id": "third",
+                "title": "Third",
+                "repository": "https://github.com/example/third",
+                "downloads": 1,
+                "github_stars": 10,
+                "manager_order": 0,
+            },
+            {
+                "id": "first",
+                "title": "First",
+                "repository": "https://github.com/example/first",
+                "downloads": 100,
+                "github_stars": 0,
+                "manager_order": 2,
+            },
+            {
+                "id": "second",
+                "title": "Second",
+                "repository": "https://github.com/example/second",
+                "downloads": 100,
+                "github_stars": 50,
+                "manager_order": 1,
+            },
+        ]
+
+        ranked = rank_entries(entries)
+
+        self.assertEqual(["second", "first", "third"], [entry["id"] for entry in ranked])
+        self.assertEqual([1, 2, 3], [entry["rank"] for entry in ranked])
 
 
 class RepoCacheTests(unittest.TestCase):

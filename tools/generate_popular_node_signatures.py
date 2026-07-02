@@ -260,6 +260,15 @@ def _metric_min_float(metrics, names):
     return min(values) if values else None
 
 
+def _metric_min_float_from_sources(sources, names):
+    values = []
+    for source in sources:
+        value = _metric_min_float(source, names)
+        if value is not None:
+            values.append(value)
+    return min(values) if values else None
+
+
 def _pack_id_from_repository(repository):
     parsed = urlparse(repository)
     if parsed.netloc:
@@ -300,10 +309,13 @@ def normalise_manager_entries(raw):
 
 
 def _rank_sort_key(pack):
-    metrics = pack.get("metrics", {})
-    downloads = _metric_max(metrics, ("downloads", "download_count"))
-    stars = _metric_max(metrics, ("stars", "github_stars", "stargazers_count"))
-    search_ranking = _metric_min_float(metrics, ("search_ranking", "search_rank", "search_order"))
+    metric_sources = (pack.get("metrics", {}), pack)
+    downloads = max(_metric_max(source, ("downloads", "download_count")) for source in metric_sources)
+    stars = max(_metric_max(source, ("stars", "github_stars", "stargazers_count")) for source in metric_sources)
+    search_ranking = _metric_min_float_from_sources(
+        metric_sources,
+        ("search_ranking", "search_rank", "search_order"),
+    )
     manager_order = int(pack.get("manager_order", 0))
     return (
         -downloads,
