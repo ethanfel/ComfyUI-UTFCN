@@ -1484,6 +1484,35 @@ NODE_CLASS_MAPPINGS = {
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
 
+    def test_tuple_wrapped_mutable_env_subscript_alias_skips_static_node(self):
+        source = '''
+TYPES = (["ok"],)
+
+
+class TupleWrappedMutableInputNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "mode": TYPES,
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "TupleWrappedMutableInputNode": TupleWrappedMutableInputNode,
+}
+
+alias = TYPES[0]
+alias.append(1)
+'''
+        result = self._extract_source(source, "tuple-wrapped-mutable-input-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
     def test_unhashable_literal_input_key_skips_repo_without_raising(self):
         source = '''
 INPUTS = {

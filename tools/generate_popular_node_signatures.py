@@ -84,7 +84,11 @@ def _invalidate_env_names(env, names):
 
 
 def _is_mutable_static_value(value):
-    return isinstance(value, (dict, list, set))
+    if isinstance(value, (dict, list, set)):
+        return True
+    if isinstance(value, tuple):
+        return any(_is_mutable_static_value(item) for item in value)
+    return False
 
 
 def _namespace_call_function_name(node):
