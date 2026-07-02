@@ -1,4 +1,5 @@
 import json
+import subprocess
 import tempfile
 import textwrap
 import unittest
@@ -7,8 +8,15 @@ from pathlib import Path
 from unittest import mock
 
 from tools.generate_popular_node_signatures import (
+    build_artifact,
+    clone_or_update_repo,
     extract_repo_signatures,
+    fetch_json,
+    main,
     normalise_input_spec,
+    normalise_manager_entries,
+    rank_packs,
+    repo_cache_path,
     write_artifact,
 )
 
@@ -5497,6 +5505,268 @@ NODE_CLASS_MAPPINGS = {
             parsed = json.loads(out.read_text(encoding="utf-8"))
 
         self.assertEqual("2026-07-02T00:00:00Z", parsed["generated_at"])
+
+
+class ManagerIngestionTests(unittest.TestCase):
+    def test_fetch_json_reads_and_decodes_json_with_clear_url_errors(self):
+        response = mock.Mock()
+        response.read.return_value = b'{"custom_nodes": []}'
+        response.__enter__ = mock.Mock(return_value=response)
+        response.__exit__ = mock.Mock(return_value=False)
+
+        with mock.patch("tools.generate_popular_node_signatures.urllib.request.urlopen", return_value=response):
+            self.assertEqual({"custom_nodes": []}, fetch_json("https://example.invalid/list.json"))
+
+        with mock.patch(
+            "tools.generate_popular_node_signatures.urllib.request.urlopen",
+            side_effect=OSError("network down"),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "https://example.invalid/list.json"):
+                fetch_json("https://example.invalid/list.json")
+
+    def test_normalise_manager_entries_accepts_git_clone_repos_and_skips_raw_file_installs(self):
+        manager_data = {
+            "custom_nodes": [
+                {
+                    "author": "Alice",
+                    "id": "alpha-id",
+                    "title": "Alpha Nodes",
+                    "files": ["https://github.com/example/alpha-nodes"],
+                    "install_type": "git-clone",
+                    "description": "Alpha description",
+                    "downloads": "42",
+                },
+                {
+                    "author": "Raw",
+                    "id": "raw-id",
+                    "title": "Raw File Node",
+                    "files": ["https://raw.githubusercontent.com/example/raw-node.py"],
+                    "install_type": "copy",
+                },
+                {
+                    "author": "Bob",
+                    "id": "reference-id",
+                    "title": "Reference Nodes",
+                    "reference": "https://github.com/example/reference-nodes.git",
+                    "install_type": "git-clone",
+                    "stars": 7,
+                },
+            ]
+        }
+
+        entries = normalise_manager_entries(manager_data)
+
+        self.assertEqual(["alpha-id", "reference-id"], [entry["id"] for entry in entries])
+        self.assertEqual("https://github.com/example/alpha-nodes", entries[0]["repository"])
+        self.assertEqual("Alpha Nodes", entries[0]["title"])
+        self.assertEqual("Alice", entries[0]["author"])
+        self.assertEqual(42, entries[0]["metrics"]["downloads"])
+        self.assertEqual("https://github.com/example/reference-nodes.git", entries[1]["repository"])
+
+    def test_rank_packs_uses_popularity_metrics_then_stable_fallbacks(self):
+        packs = [
+            {
+                "id": "tie-b",
+                "title": "Tie B",
+                "repository": "https://github.com/example/tie-b",
+                "metrics": {"downloads": 5},
+            },
+            {
+                "id": "most",
+                "title": "Most",
+                "repository": "https://github.com/example/most",
+                "metrics": {"stars": 10},
+            },
+            {
+                "id": "tie-a",
+                "title": "Tie A",
+                "repository": "https://github.com/example/tie-a",
+                "metrics": {"favorites": 5},
+            },
+            {
+                "id": "none",
+                "title": "None",
+                "repository": "https://github.com/example/none",
+                "metrics": {},
+            },
+        ]
+
+        ranked = rank_packs(packs)
+
+        self.assertEqual(["most", "tie-a", "tie-b", "none"], [pack["id"] for pack in ranked])
+        self.assertEqual([1, 2, 3, 4], [pack["rank"] for pack in ranked])
+
+
+class RepoCacheTests(unittest.TestCase):
+    def test_repo_cache_path_is_safe_stable_and_collision_resistant(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cache_dir = Path(tmp)
+
+            first = repo_cache_path("https://github.com/Owner/Repo.git", cache_dir)
+            same = repo_cache_path("https://github.com/Owner/Repo.git", cache_dir)
+            collision = repo_cache_path("https://github.com/Other/Repo.git", cache_dir)
+
+        self.assertEqual(first, same)
+        self.assertNotEqual(first, collision)
+        self.assertEqual("repos", first.parent.name)
+        self.assertNotIn("..", first.name)
+        self.assertRegex(first.name, r"^github-com-owner-repo-[0-9a-f]{12}$")
+
+    def test_clone_or_update_repo_clones_missing_repo_and_pulls_existing_repo(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cache_dir = Path(tmp)
+            url = "https://github.com/example/pack.git"
+            expected_path = repo_cache_path(url, cache_dir)
+
+            with mock.patch("tools.generate_popular_node_signatures.subprocess.run") as run:
+                self.assertEqual(expected_path, clone_or_update_repo(url, cache_dir))
+
+            run.assert_called_once_with(
+                ["git", "clone", "--depth", "1", url, str(expected_path)],
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+
+            expected_path.mkdir(parents=True)
+            with mock.patch("tools.generate_popular_node_signatures.subprocess.run") as run:
+                self.assertEqual(expected_path, clone_or_update_repo(url, cache_dir))
+
+            run.assert_not_called()
+
+            with mock.patch("tools.generate_popular_node_signatures.subprocess.run") as run:
+                self.assertEqual(expected_path, clone_or_update_repo(url, cache_dir, refresh=True))
+
+            run.assert_called_once_with(
+                ["git", "-C", str(expected_path), "pull", "--ff-only"],
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+
+
+class BuildArtifactTests(unittest.TestCase):
+    def _write_fixture_repo(self, path):
+        Path(path, "__init__.py").write_text(
+            textwrap.dedent(
+                '''
+                class GoodNode:
+                    RETURN_TYPES = ("IMAGE",)
+
+                    @classmethod
+                    def INPUT_TYPES(cls):
+                        return {
+                            "required": {
+                                "image": ("IMAGE",),
+                            },
+                        }
+
+
+                NODE_CLASS_MAPPINGS = {
+                    "GoodNode": GoodNode,
+                }
+                '''
+            ),
+            encoding="utf-8",
+        )
+
+    def test_build_artifact_continues_after_failed_repo_and_records_pack_error(self):
+        manager_data = {
+            "custom_nodes": [
+                {
+                    "id": "broken-pack",
+                    "title": "Broken Pack",
+                    "files": ["https://github.com/example/broken-pack"],
+                    "install_type": "git-clone",
+                    "downloads": 20,
+                },
+                {
+                    "id": "good-pack",
+                    "title": "Good Pack",
+                    "files": ["https://github.com/example/good-pack"],
+                    "install_type": "git-clone",
+                    "downloads": 10,
+                },
+            ]
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            repo_dir = tmp_path / "good-repo"
+            repo_dir.mkdir()
+            self._write_fixture_repo(repo_dir)
+            output = tmp_path / "popular_node_signatures.json"
+
+            with (
+                mock.patch("tools.generate_popular_node_signatures.fetch_json", return_value=manager_data),
+                mock.patch(
+                    "tools.generate_popular_node_signatures.clone_or_update_repo",
+                    side_effect=[RuntimeError("clone failed"), repo_dir],
+                ),
+            ):
+                summary = build_artifact(
+                    manager_url="https://example.invalid/manager.json",
+                    cache_dir=tmp_path / "cache",
+                    output=output,
+                    limit=2,
+                    generated_at="2026-07-02T00:00:00Z",
+                )
+
+            payload = json.loads(output.read_text(encoding="utf-8"))
+
+        self.assertEqual(2, summary["processed"])
+        self.assertEqual(1, summary["errors"])
+        self.assertEqual(1, summary["node_count"])
+        self.assertEqual("error", payload["packs"]["broken-pack"]["status"])
+        self.assertIn("clone failed", payload["packs"]["broken-pack"]["error"])
+        self.assertEqual("ok", payload["packs"]["good-pack"]["status"])
+        self.assertIn("GoodNode", payload["nodes"])
+
+    def test_cli_invokes_build_artifact_and_prints_summary(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp, "artifact.json")
+            cache = Path(tmp, "cache")
+            fake_summary = {
+                "processed": 3,
+                "pack_count": 2,
+                "node_count": 7,
+                "errors": 1,
+                "output": output,
+            }
+            with (
+                mock.patch("tools.generate_popular_node_signatures.build_artifact", return_value=fake_summary) as build,
+                mock.patch("builtins.print") as print_mock,
+            ):
+                exit_code = main(
+                    [
+                        "--manager-url",
+                        "https://example.invalid/manager.json",
+                        "--cache-dir",
+                        str(cache),
+                        "--output",
+                        str(output),
+                        "--limit",
+                        "3",
+                        "--refresh",
+                    ]
+                )
+
+        self.assertEqual(0, exit_code)
+        build.assert_called_once_with(
+            manager_url="https://example.invalid/manager.json",
+            cache_dir=cache,
+            output=output,
+            limit=3,
+            refresh=True,
+            generated_at=mock.ANY,
+        )
+        printed = print_mock.call_args.args[0]
+        self.assertIn("processed=3", printed)
+        self.assertIn("packs=2", printed)
+        self.assertIn("nodes=7", printed)
+        self.assertIn("errors=1", printed)
+        self.assertIn(str(output), printed)
 
 
 if __name__ == "__main__":
