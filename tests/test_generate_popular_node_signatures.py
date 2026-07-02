@@ -5583,6 +5583,34 @@ class ManagerIngestionTests(unittest.TestCase):
         self.assertEqual(1, len(entries))
         self.assertEqual("https://github.com/example/actual-install-repo", entries[0]["repository"])
 
+    def test_normalise_manager_entries_preserves_nested_metrics(self):
+        manager_data = {
+            "custom_nodes": [
+                {
+                    "id": "nested-low",
+                    "title": "Nested Low",
+                    "files": ["https://github.com/example/nested-low"],
+                    "install_type": "git-clone",
+                    "metrics": {"downloads": 1, "github_stars": 45, "search_ranking": 7.5},
+                },
+                {
+                    "id": "nested-high",
+                    "title": "Nested High",
+                    "files": ["https://github.com/example/nested-high"],
+                    "install_type": "git-clone",
+                    "metrics": {"downloads": 123, "github_stars": 1, "search_ranking": 1.0},
+                },
+            ]
+        }
+
+        entries = normalise_manager_entries(manager_data)
+        ranked = rank_packs(entries)
+
+        self.assertEqual(1, entries[0]["metrics"]["downloads"])
+        self.assertEqual(45, entries[0]["metrics"]["github_stars"])
+        self.assertEqual(7.5, entries[0]["metrics"]["search_ranking"])
+        self.assertEqual(["nested-high", "nested-low"], [entry["id"] for entry in ranked])
+
     def test_normalise_manager_entries_skips_copy_installs_even_with_github_reference(self):
         manager_data = {
             "custom_nodes": [

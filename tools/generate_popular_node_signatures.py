@@ -229,7 +229,7 @@ def _manager_entry_repository(item):
 def _entry_metrics(item):
     metrics = {}
     sources = [item]
-    for key in ("stats", "statistics", "metadata"):
+    for key in ("metrics", "stats", "statistics", "metadata"):
         value = item.get(key)
         if isinstance(value, dict):
             sources.append(value)
