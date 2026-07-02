@@ -251,6 +251,28 @@ def _assigned_names_in_control_flow(stmt):
     return names
 
 
+def _has_wildcard_import_in_control_flow(stmt):
+    found = False
+
+    class WildcardImportVisitor(ast.NodeVisitor):
+        def visit_FunctionDef(self, node):
+            return None
+
+        def visit_AsyncFunctionDef(self, node):
+            return None
+
+        def visit_ClassDef(self, node):
+            return None
+
+        def visit_ImportFrom(self, node):
+            nonlocal found
+            if _has_wildcard_import(node):
+                found = True
+
+    WildcardImportVisitor().visit(stmt)
+    return found
+
+
 def _collect_module_env(tree):
     env = {}
     for stmt in tree.body:
@@ -311,6 +333,9 @@ def _collect_module_env(tree):
                 env.pop(name, None)
             continue
         if isinstance(stmt, (ast.If, ast.For, ast.AsyncFor, ast.While, ast.Try, ast.With, ast.AsyncWith, ast.Match)):
+            if _has_wildcard_import_in_control_flow(stmt):
+                env.clear()
+                continue
             for name in _assigned_names_in_control_flow(stmt):
                 env.pop(name, None)
             continue
@@ -373,6 +398,8 @@ def _class_attr(cls, name, env):
             continue
         if isinstance(stmt, (ast.If, ast.For, ast.AsyncFor, ast.While, ast.Try, ast.With, ast.AsyncWith, ast.Match)):
             if name in _assigned_names_in_control_flow(stmt):
+                value = _INVALID
+            if _has_wildcard_import_in_control_flow(stmt):
                 value = _INVALID
             continue
         if name in _bound_names(stmt):
@@ -467,6 +494,8 @@ def _final_module_dict(tree, env, name, value_converter):
             continue
         if isinstance(stmt, (ast.If, ast.For, ast.AsyncFor, ast.While, ast.Try, ast.With, ast.AsyncWith, ast.Match)):
             if name in _assigned_names_in_control_flow(stmt):
+                value = _INVALID
+            if _has_wildcard_import_in_control_flow(stmt):
                 value = _INVALID
             continue
         if _has_wildcard_import(stmt):

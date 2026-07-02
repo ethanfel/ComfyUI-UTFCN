@@ -414,6 +414,34 @@ NODE_CLASS_MAPPINGS = {
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
 
+    def test_nested_wildcard_import_invalidates_static_env_values(self):
+        source = '''
+INPUTS = {
+    "required": {
+        "image": ("IMAGE",),
+    },
+}
+if True:
+    from something import *
+
+
+class NestedWildcardImportInputNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return INPUTS
+
+
+NODE_CLASS_MAPPINGS = {
+    "NestedWildcardImportInputNode": NestedWildcardImportInputNode,
+}
+'''
+        result = self._extract_source(source, "nested-wildcard-import-input-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
     def test_annotated_reassignment_invalidates_static_env_value(self):
         source = '''
 def build_inputs():
@@ -759,6 +787,31 @@ NODE_CLASS_MAPPINGS = {
 from something import *
 '''
         result = self._extract_source(source, "wildcard-import-mapping-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_nested_wildcard_import_invalidates_static_node_mapping(self):
+        source = '''
+class NestedWildcardImportMappingNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "NestedWildcardImportMappingNode": NestedWildcardImportMappingNode,
+}
+if True:
+    from something import *
+'''
+        result = self._extract_source(source, "nested-wildcard-import-mapping-pack")
 
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
