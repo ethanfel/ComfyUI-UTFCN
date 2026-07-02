@@ -718,6 +718,54 @@ NODE_CLASS_MAPPINGS = {
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
 
+    def test_subscript_assignment_to_return_names_skips_node(self):
+        source = '''
+class SubscriptMutatedReturnNamesNode:
+    RETURN_TYPES = ("IMAGE",)
+    RETURN_NAMES = ["image"]
+    RETURN_NAMES[0] = "mask"
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "SubscriptMutatedReturnNamesNode": SubscriptMutatedReturnNamesNode,
+}
+'''
+        result = self._extract_source(source, "subscript-mutated-return-names-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_missing_return_names_is_allowed(self):
+        source = '''
+class MissingReturnNamesNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "MissingReturnNamesNode": MissingReturnNamesNode,
+}
+'''
+        result = self._extract_source(source, "missing-return-names-pack")
+
+        self.assertEqual([], result["nodes"]["MissingReturnNamesNode"]["output_names"])
+        self.assertEqual("ok", result["pack"]["status"])
+
     def test_final_static_return_types_assignment_wins(self):
         source = '''
 class FinalReturnTypesNode:

@@ -419,8 +419,10 @@ def _class_attr(cls, name, env):
             continue
         if name in _bound_names(stmt):
             value = _INVALID
-    if value in (_MISSING, _INVALID):
+    if value is _MISSING:
         return None
+    if value is _INVALID:
+        return _INVALID
     return value
 
 
@@ -539,6 +541,8 @@ def _signature_from_class(node_type, cls, display, pack_meta, env):
     input_types = _input_types(cls, env)
     return_types = _class_attr(cls, "RETURN_TYPES", env)
     return_names = _class_attr(cls, "RETURN_NAMES", env)
+    if return_types is _INVALID or return_names is _INVALID:
+        return None
     if not isinstance(input_types, dict) or not isinstance(return_types, (list, tuple)):
         return None
 
