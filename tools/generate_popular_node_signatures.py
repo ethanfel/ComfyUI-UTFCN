@@ -33,6 +33,9 @@ _MUTATING_METHODS = {
     "sort",
     "update",
 }
+_CONTROL_FLOW_TYPES = (ast.If, ast.For, ast.AsyncFor, ast.While, ast.Try, ast.With, ast.AsyncWith, ast.Match)
+if hasattr(ast, "TryStar"):
+    _CONTROL_FLOW_TYPES += (ast.TryStar,)
 
 
 def _literal(node, env, allow_mutable_env=True):
@@ -133,6 +136,8 @@ def _bound_names(stmt):
     names = set()
     if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
         names.add(stmt.name)
+    elif hasattr(ast, "TypeAlias") and isinstance(stmt, ast.TypeAlias):
+        names.update(_target_names(stmt.name))
     elif isinstance(stmt, ast.Import):
         for alias in stmt.names:
             names.add(alias.asname or alias.name.split(".", 1)[0])
@@ -147,6 +152,9 @@ def _bound_names(stmt):
     elif isinstance(stmt, ast.Match):
         for case in stmt.cases:
             names.update(_pattern_bound_names(case.pattern))
+    elif isinstance(stmt, ast.ExceptHandler):
+        if stmt.name:
+            names.add(stmt.name)
     names.update(_named_expr_target_names(stmt))
     return names
 
@@ -254,6 +262,13 @@ def _assigned_names_in_control_flow(stmt):
         def visit_Delete(self, node):
             names.update(_delete_target_names(node))
 
+        def visit_ExceptHandler(self, node):
+            names.update(_bound_names(node))
+            self.generic_visit(node)
+
+        def visit_TypeAlias(self, node):
+            names.update(_bound_names(node))
+
         def visit_Expr(self, node):
             names.update(_mutating_call_target_names(node))
             names.update(_named_expr_target_names(node))
@@ -312,7 +327,7 @@ def _has_module_wildcard_import(tree):
     for stmt in tree.body:
         if _has_wildcard_import(stmt):
             return True
-        if isinstance(stmt, (ast.If, ast.For, ast.AsyncFor, ast.While, ast.Try, ast.With, ast.AsyncWith, ast.Match)):
+        if isinstance(stmt, _CONTROL_FLOW_TYPES):
             if _has_wildcard_import_in_control_flow(stmt):
                 return True
     return False
@@ -397,7 +412,7 @@ def _apply_module_stmt_to_env(stmt, env, class_bindings=None):
         for name in names:
             env.pop(name, None)
         return
-    if isinstance(stmt, (ast.If, ast.For, ast.AsyncFor, ast.While, ast.Try, ast.With, ast.AsyncWith, ast.Match)):
+    if isinstance(stmt, _CONTROL_FLOW_TYPES):
         if _has_wildcard_import_in_control_flow(stmt):
             env.clear()
             if class_bindings is not None:
@@ -530,7 +545,7 @@ def _class_attr(cls, name, env):
             if name in _bound_names(stmt):
                 value = _INVALID
             continue
-        if isinstance(stmt, (ast.If, ast.For, ast.AsyncFor, ast.While, ast.Try, ast.With, ast.AsyncWith, ast.Match)):
+        if isinstance(stmt, _CONTROL_FLOW_TYPES):
             target_names = _assigned_names_in_control_flow(stmt)
             if aliases.intersection(target_names):
                 value = _INVALID
@@ -581,7 +596,7 @@ def _input_types(cls, env):
             if "INPUT_TYPES" in _bound_names(stmt):
                 value = _INVALID
             continue
-        if isinstance(stmt, (ast.If, ast.For, ast.AsyncFor, ast.While, ast.Try, ast.With, ast.AsyncWith, ast.Match)):
+        if isinstance(stmt, _CONTROL_FLOW_TYPES):
             if "INPUT_TYPES" in _assigned_names_in_control_flow(stmt):
                 value = _INVALID
             if _has_wildcard_import_in_control_flow(stmt):
@@ -674,7 +689,7 @@ def _final_module_dict(tree, name, value_converter):
                 value = _INVALID
             _apply_module_stmt_to_env(stmt, env, class_bindings)
             continue
-        if isinstance(stmt, (ast.If, ast.For, ast.AsyncFor, ast.While, ast.Try, ast.With, ast.AsyncWith, ast.Match)):
+        if isinstance(stmt, _CONTROL_FLOW_TYPES):
             if name in _assigned_names_in_control_flow(stmt):
                 value = _INVALID
             if _has_wildcard_import_in_control_flow(stmt):

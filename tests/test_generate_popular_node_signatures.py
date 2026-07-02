@@ -29,6 +29,12 @@ class StaticExtractionTests(unittest.TestCase):
                 },
             )
 
+    def _skip_if_syntax_unsupported(self, source):
+        try:
+            compile(textwrap.dedent(source), "<test-source>", "exec")
+        except SyntaxError as exc:
+            self.skipTest(f"syntax unsupported by this Python: {exc.msg}")
+
     def test_normalise_input_spec_reduces_combo_lists(self):
         self.assertEqual("COMBO", normalise_input_spec((["nearest", "bilinear"],)))
         self.assertEqual("IMAGE", normalise_input_spec(("IMAGE",)))
@@ -563,6 +569,99 @@ NODE_CLASS_MAPPINGS = {
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
 
+    def test_except_handler_binding_invalidates_static_env_value(self):
+        source = '''
+INPUTS = {
+    "required": {
+        "image": ("IMAGE",),
+    },
+}
+try:
+    pass
+except Exception as INPUTS:
+    pass
+
+
+class ExceptHandlerBoundInputEnvNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return INPUTS
+
+
+NODE_CLASS_MAPPINGS = {
+    "ExceptHandlerBoundInputEnvNode": ExceptHandlerBoundInputEnvNode,
+}
+'''
+        result = self._extract_source(source, "except-handler-bound-input-env-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_trystar_assignment_invalidates_static_env_value(self):
+        source = '''
+def build_inputs():
+    return {"required": {"mask": ("MASK",)}}
+
+
+INPUTS = {
+    "required": {
+        "image": ("IMAGE",),
+    },
+}
+try:
+    pass
+except* RuntimeError:
+    INPUTS = build_inputs()
+
+
+class TryStarRebindInputEnvNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return INPUTS
+
+
+NODE_CLASS_MAPPINGS = {
+    "TryStarRebindInputEnvNode": TryStarRebindInputEnvNode,
+}
+'''
+        self._skip_if_syntax_unsupported(source)
+        result = self._extract_source(source, "trystar-rebind-input-env-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_type_alias_binding_invalidates_static_env_value(self):
+        source = '''
+INPUTS = {
+    "required": {
+        "image": ("IMAGE",),
+    },
+}
+type INPUTS = int
+
+
+class TypeAliasBoundInputEnvNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return INPUTS
+
+
+NODE_CLASS_MAPPINGS = {
+    "TypeAliasBoundInputEnvNode": TypeAliasBoundInputEnvNode,
+}
+'''
+        self._skip_if_syntax_unsupported(source)
+        result = self._extract_source(source, "type-alias-bound-input-env-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
     def test_delete_invalidates_static_env_value(self):
         source = '''
 INPUTS = {
@@ -1019,6 +1118,33 @@ NODE_CLASS_MAPPINGS = {
 }
 '''
         result = self._extract_source(source, "default-mutated-return-types-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_except_handler_binding_to_return_types_skips_node(self):
+        source = '''
+class ExceptHandlerBoundReturnTypesNode:
+    RETURN_TYPES = ("IMAGE",)
+    try:
+        pass
+    except Exception as RETURN_TYPES:
+        pass
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "ExceptHandlerBoundReturnTypesNode": ExceptHandlerBoundReturnTypesNode,
+}
+'''
+        result = self._extract_source(source, "except-handler-bound-return-types-pack")
 
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
@@ -1593,6 +1719,31 @@ ALIAS: dict = NODE_CLASS_MAPPINGS
 ALIAS.clear()
 '''
         result = self._extract_source(source, "annotated-alias-mutated-mapping-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_type_alias_binding_invalidates_static_node_mapping(self):
+        source = '''
+class TypeAliasBoundMappingNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "TypeAliasBoundMappingNode": TypeAliasBoundMappingNode,
+}
+type NODE_CLASS_MAPPINGS = dict
+'''
+        self._skip_if_syntax_unsupported(source)
+        result = self._extract_source(source, "type-alias-bound-mapping-pack")
 
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
