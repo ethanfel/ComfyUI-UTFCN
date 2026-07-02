@@ -1621,6 +1621,34 @@ NODE_CLASS_MAPPINGS = {
         self.assertIn("TopLevelMappedNode", result["nodes"])
         self.assertEqual("ok", result["pack"]["status"])
 
+    def test_decorated_class_mapping_skips_node(self):
+        source = '''
+def decorator(cls):
+    return cls
+
+
+@decorator
+class DecoratedMappedNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "DecoratedMappedNode": DecoratedMappedNode,
+}
+'''
+        result = self._extract_source(source, "decorated-mapped-class-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
     def test_node_mapping_key_uses_assignment_time_env(self):
         source = '''
 KEY = "Original"
@@ -1649,6 +1677,58 @@ KEY = "Wrong"
         self.assertNotIn("Wrong", result["nodes"])
         self.assertEqual(["IMAGE"], result["nodes"]["Original"]["outputs"])
         self.assertEqual("ok", result["pack"]["status"])
+
+    def test_module_class_return_types_patch_after_mapping_skips_node(self):
+        source = '''
+class PatchedReturnTypesNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "PatchedReturnTypesNode": PatchedReturnTypesNode,
+}
+PatchedReturnTypesNode.RETURN_TYPES = ("MASK",)
+'''
+        result = self._extract_source(source, "patched-return-types-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_module_class_input_types_patch_after_mapping_skips_node(self):
+        source = '''
+def build_inputs():
+    return {"required": {"mask": ("MASK",)}}
+
+
+class PatchedInputTypesNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "PatchedInputTypesNode": PatchedInputTypesNode,
+}
+PatchedInputTypesNode.INPUT_TYPES = build_inputs
+'''
+        result = self._extract_source(source, "patched-input-types-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
 
     def test_mutated_node_class_mapping_skips_node(self):
         source = '''
