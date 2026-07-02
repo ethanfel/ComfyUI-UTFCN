@@ -8,6 +8,7 @@ import json
 import os
 import re
 import subprocess
+import tempfile
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
@@ -17,7 +18,7 @@ SCHEMA_VERSION = 1
 MANAGER_LIST_URL = "https://raw.githubusercontent.com/ltdrdata/ComfyUI-Manager/main/custom-node-list.json"
 REGISTRY_NODES_URL = "https://api.comfy.org/nodes"
 DEFAULT_GENERATED_AT = "1970-01-01T00:00:00Z"
-DEFAULT_CACHE_DIR = Path(".cache/utfcn-popular-node-repos")
+DEFAULT_CACHE_DIR = Path(tempfile.gettempdir()) / "utfcn-popular-node-repos"
 DEFAULT_OUTPUT = Path("popular_node_signatures.json")
 USER_AGENT = "ComfyUI-UTFCN popular node signature generator"
 
@@ -56,6 +57,9 @@ _METRIC_FIELDS = (
     "stars",
     "github_stars",
     "stargazers_count",
+    "search_ranking",
+    "search_rank",
+    "search_order",
     "favorites",
     "favourites",
     "installed",
@@ -63,6 +67,7 @@ _METRIC_FIELDS = (
     "install_count",
     "count",
 )
+_SEARCH_RANKING_FIELDS = {"search_ranking", "search_rank", "search_order"}
 
 
 def fetch_json(url):
@@ -98,6 +103,20 @@ def _coerce_int(value):
         if text.isdigit() or (text.startswith("-") and text[1:].isdigit()):
             return int(text)
     return 0
+
+
+def _coerce_float(value):
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        text = value.strip().replace(",", "")
+        try:
+            return float(text)
+        except ValueError:
+            return None
+    return None
 
 
 def _slug(value, default="unnamed-pack"):
@@ -216,10 +235,29 @@ def _entry_metrics(item):
             sources.append(value)
     for source in sources:
         for field in _METRIC_FIELDS:
-            value = _coerce_int(source.get(field))
-            if value:
-                metrics[field] = value
+            if field in _SEARCH_RANKING_FIELDS:
+                value = _coerce_float(source.get(field))
+                if value is not None:
+                    metrics[field] = value
+            else:
+                value = _coerce_int(source.get(field))
+                if value:
+                    metrics[field] = value
     return metrics
+
+
+def _metric_max(metrics, names):
+    values = [_coerce_int(metrics.get(name)) for name in names]
+    return max(values, default=0)
+
+
+def _metric_min_float(metrics, names):
+    values = []
+    for name in names:
+        value = _coerce_float(metrics.get(name))
+        if value is not None:
+            values.append(value)
+    return min(values) if values else None
 
 
 def _pack_id_from_repository(repository):
@@ -261,8 +299,22 @@ def normalise_manager_entries(raw):
     return entries
 
 
-def _popularity_score(pack):
-    return sum(_coerce_int(value) for value in pack.get("metrics", {}).values())
+def _rank_sort_key(pack):
+    metrics = pack.get("metrics", {})
+    downloads = _metric_max(metrics, ("downloads", "download_count"))
+    stars = _metric_max(metrics, ("stars", "github_stars", "stargazers_count"))
+    search_ranking = _metric_min_float(metrics, ("search_ranking", "search_rank", "search_order"))
+    manager_order = int(pack.get("manager_order", 0))
+    return (
+        -downloads,
+        -stars,
+        1 if search_ranking is None else 0,
+        search_ranking if search_ranking is not None else 0.0,
+        manager_order,
+        str(pack.get("title", "")).lower(),
+        str(pack.get("id", "")),
+        str(pack.get("repository", "")),
+    )
 
 
 def rank_packs(packs, limit=None):
@@ -276,28 +328,10 @@ def rank_packs(packs, limit=None):
         if previous is None:
             best_by_repository[repository] = candidate
             continue
-        candidate_key = (
-            _popularity_score(candidate),
-            -int(candidate.get("manager_order", 0)),
-            str(candidate.get("id", "")),
-        )
-        previous_key = (
-            _popularity_score(previous),
-            -int(previous.get("manager_order", 0)),
-            str(previous.get("id", "")),
-        )
-        if candidate_key > previous_key:
+        if _rank_sort_key(candidate) < _rank_sort_key(previous):
             best_by_repository[repository] = candidate
 
-    ranked = sorted(
-        best_by_repository.values(),
-        key=lambda pack: (
-            -_popularity_score(pack),
-            str(pack.get("title", "")).lower(),
-            str(pack.get("id", "")),
-            str(pack.get("repository", "")),
-        ),
-    )
+    ranked = sorted(best_by_repository.values(), key=_rank_sort_key)
     if limit is not None:
         ranked = ranked[:limit]
     result = []

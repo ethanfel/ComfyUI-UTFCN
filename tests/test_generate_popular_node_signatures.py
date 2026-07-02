@@ -8,6 +8,7 @@ from pathlib import Path
 from unittest import mock
 
 from tools.generate_popular_node_signatures import (
+    DEFAULT_CACHE_DIR,
     build_artifact,
     clone_or_update_repo,
     extract_repo_signatures,
@@ -5602,19 +5603,19 @@ class ManagerIngestionTests(unittest.TestCase):
                 "id": "tie-b",
                 "title": "Tie B",
                 "repository": "https://github.com/example/tie-b",
-                "metrics": {"downloads": 5},
+                "metrics": {"downloads": 5, "stars": 2},
             },
             {
                 "id": "most",
                 "title": "Most",
                 "repository": "https://github.com/example/most",
-                "metrics": {"stars": 10},
+                "metrics": {"downloads": 10},
             },
             {
                 "id": "tie-a",
                 "title": "Tie A",
                 "repository": "https://github.com/example/tie-a",
-                "metrics": {"favorites": 5},
+                "metrics": {"downloads": 5, "stars": 2},
             },
             {
                 "id": "none",
@@ -5629,8 +5630,36 @@ class ManagerIngestionTests(unittest.TestCase):
         self.assertEqual(["most", "tie-a", "tie-b", "none"], [pack["id"] for pack in ranked])
         self.assertEqual([1, 2, 3, 4], [pack["rank"] for pack in ranked])
 
+    def test_rank_packs_prioritizes_downloads_before_stars(self):
+        packs = [
+            {
+                "id": "many-stars",
+                "title": "Many Stars",
+                "repository": "https://github.com/example/many-stars",
+                "metrics": {"downloads": 1, "stars": 1000},
+            },
+            {
+                "id": "many-downloads",
+                "title": "Many Downloads",
+                "repository": "https://github.com/example/many-downloads",
+                "metrics": {"downloads": 100, "stars": 0},
+            },
+        ]
+
+        ranked = rank_packs(packs)
+
+        self.assertEqual(["many-downloads", "many-stars"], [pack["id"] for pack in ranked])
+
 
 class RepoCacheTests(unittest.TestCase):
+    def test_default_cache_dir_is_under_system_temp_dir(self):
+        temp_root = Path(tempfile.gettempdir()).resolve()
+        default_cache = DEFAULT_CACHE_DIR.resolve()
+
+        self.assertTrue(default_cache.is_absolute())
+        self.assertTrue(default_cache == temp_root or temp_root in default_cache.parents)
+        self.assertNotEqual(Path(".cache/utfcn-popular-node-repos"), DEFAULT_CACHE_DIR)
+
     def test_repo_cache_path_is_safe_stable_and_collision_resistant(self):
         with tempfile.TemporaryDirectory() as tmp:
             cache_dir = Path(tmp)
