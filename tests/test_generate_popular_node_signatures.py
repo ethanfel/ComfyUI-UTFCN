@@ -2354,6 +2354,58 @@ NODE_DISPLAY_NAME_MAPPINGS = build_displays()
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
 
+    def test_non_string_display_mapping_value_skips_node(self):
+        source = '''
+class NonStringDisplayValueNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "NonStringDisplayValueNode": NonStringDisplayValueNode,
+}
+NODE_DISPLAY_NAME_MAPPINGS = {
+    "NonStringDisplayValueNode": 123,
+}
+'''
+        result = self._extract_source(source, "non-string-display-value-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_non_string_display_mapping_key_skips_node(self):
+        source = '''
+class NonStringDisplayKeyNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "NonStringDisplayKeyNode": NonStringDisplayKeyNode,
+}
+NODE_DISPLAY_NAME_MAPPINGS = {
+    123: "Non String Display Key",
+}
+'''
+        result = self._extract_source(source, "non-string-display-key-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
     def test_input_types_with_dynamic_control_flow_is_skipped(self):
         source = '''
 def something():

@@ -1074,7 +1074,9 @@ def _display_mappings(tree):
         return {}
     if displays is _INVALID:
         return _INVALID
-    return {str(k): str(v) for k, v in displays.items()}
+    if not all(isinstance(key, str) and isinstance(value, str) for key, value in displays.items()):
+        return _INVALID
+    return displays
 
 
 def _signature_from_class(node_type, cls, display, pack_meta, class_env, input_env):
