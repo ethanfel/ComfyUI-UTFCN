@@ -148,6 +148,10 @@ def _bound_names(stmt):
     return names
 
 
+def _has_wildcard_import(stmt):
+    return isinstance(stmt, ast.ImportFrom) and any(alias.name == "*" for alias in stmt.names)
+
+
 def _assignment_target_names(stmt):
     if isinstance(stmt, ast.Assign):
         names = set()
@@ -276,6 +280,14 @@ def _collect_module_env(tree):
                 continue
             if isinstance(stmt.target, ast.Name):
                 name = stmt.target.id
+                if (
+                    isinstance(stmt.value, ast.Name)
+                    and stmt.value.id in env
+                    and _is_mutable_static_value(env[stmt.value.id])
+                ):
+                    env.pop(stmt.value.id, None)
+                    env.pop(name, None)
+                    continue
                 try:
                     env[name] = _literal(stmt.value, env)
                 except UnsupportedStaticExpression:
@@ -301,6 +313,9 @@ def _collect_module_env(tree):
         if isinstance(stmt, (ast.If, ast.For, ast.AsyncFor, ast.While, ast.Try, ast.With, ast.AsyncWith, ast.Match)):
             for name in _assigned_names_in_control_flow(stmt):
                 env.pop(name, None)
+            continue
+        if _has_wildcard_import(stmt):
+            env.clear()
             continue
         for name in _bound_names(stmt):
             env.pop(name, None)
@@ -425,6 +440,8 @@ def _final_module_dict(tree, env, name, value_converter):
             continue
         if isinstance(stmt, ast.AnnAssign):
             if not _name_is_assigned(stmt, name):
+                if isinstance(stmt.value, ast.Name) and stmt.value.id == name:
+                    value = _INVALID
                 continue
             if isinstance(stmt.target, ast.Name) and stmt.value is not None:
                 try:
@@ -451,6 +468,9 @@ def _final_module_dict(tree, env, name, value_converter):
         if isinstance(stmt, (ast.If, ast.For, ast.AsyncFor, ast.While, ast.Try, ast.With, ast.AsyncWith, ast.Match)):
             if name in _assigned_names_in_control_flow(stmt):
                 value = _INVALID
+            continue
+        if _has_wildcard_import(stmt):
+            value = _INVALID
             continue
         if name in _bound_names(stmt):
             value = _INVALID

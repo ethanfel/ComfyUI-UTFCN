@@ -359,6 +359,61 @@ NODE_CLASS_MAPPINGS = {
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
 
+    def test_annotated_alias_mutation_invalidates_static_source_value(self):
+        source = '''
+INPUTS = {
+    "required": {
+        "image": ("IMAGE",),
+    },
+}
+ALIAS: dict = INPUTS
+ALIAS.clear()
+
+
+class AnnotatedAliasMutatedInputNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return INPUTS
+
+
+NODE_CLASS_MAPPINGS = {
+    "AnnotatedAliasMutatedInputNode": AnnotatedAliasMutatedInputNode,
+}
+'''
+        result = self._extract_source(source, "annotated-alias-mutated-input-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_wildcard_import_invalidates_static_env_values(self):
+        source = '''
+INPUTS = {
+    "required": {
+        "image": ("IMAGE",),
+    },
+}
+from something import *
+
+
+class WildcardImportInputNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return INPUTS
+
+
+NODE_CLASS_MAPPINGS = {
+    "WildcardImportInputNode": WildcardImportInputNode,
+}
+'''
+        result = self._extract_source(source, "wildcard-import-input-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
     def test_annotated_reassignment_invalidates_static_env_value(self):
         source = '''
 def build_inputs():
@@ -655,6 +710,55 @@ NODE_CLASS_MAPPINGS = {
 NODE_CLASS_MAPPINGS.clear()
 '''
         result = self._extract_source(source, "mutated-mapping-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_annotated_alias_mutation_invalidates_static_node_mapping(self):
+        source = '''
+class AnnotatedAliasMutatedMappingNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "AnnotatedAliasMutatedMappingNode": AnnotatedAliasMutatedMappingNode,
+}
+ALIAS: dict = NODE_CLASS_MAPPINGS
+ALIAS.clear()
+'''
+        result = self._extract_source(source, "annotated-alias-mutated-mapping-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_wildcard_import_invalidates_static_node_mapping(self):
+        source = '''
+class WildcardImportMappingNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "WildcardImportMappingNode": WildcardImportMappingNode,
+}
+from something import *
+'''
+        result = self._extract_source(source, "wildcard-import-mapping-pack")
 
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
