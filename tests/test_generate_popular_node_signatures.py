@@ -16,6 +16,19 @@ class StaticExtractionTests(unittest.TestCase):
         parsed = json.loads(text)
         return text.replace(parsed["generated_at"], "<generated-at>")
 
+    def _extract_source(self, source, pack_id="sample-pack"):
+        with tempfile.TemporaryDirectory() as tmp:
+            Path(tmp, "__init__.py").write_text(textwrap.dedent(source), encoding="utf-8")
+            return extract_repo_signatures(
+                Path(tmp),
+                {
+                    "id": pack_id,
+                    "title": "Sample Pack",
+                    "repository": f"https://github.com/example/{pack_id}",
+                    "rank": 1,
+                },
+            )
+
     def test_normalise_input_spec_reduces_combo_lists(self):
         self.assertEqual("COMBO", normalise_input_spec((["nearest", "bilinear"],)))
         self.assertEqual("IMAGE", normalise_input_spec(("IMAGE",)))
@@ -177,6 +190,179 @@ NODE_CLASS_MAPPINGS = {
 
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_annotated_reassignment_invalidates_static_env_value(self):
+        source = '''
+def build_inputs():
+    return {"required": {"image": ("IMAGE",)}}
+
+
+INPUTS = {
+    "required": {
+        "image": ("IMAGE",),
+    },
+}
+INPUTS: dict = build_inputs()
+
+
+class AnnotatedRebindNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return INPUTS
+
+
+NODE_CLASS_MAPPINGS = {
+    "AnnotatedRebindNode": AnnotatedRebindNode,
+}
+'''
+        result = self._extract_source(source, "annotated-rebind-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_multi_target_reassignment_invalidates_static_env_value(self):
+        source = '''
+def build_inputs():
+    return {"required": {"image": ("IMAGE",)}}
+
+
+INPUTS = {
+    "required": {
+        "image": ("IMAGE",),
+    },
+}
+OTHER = INPUTS = build_inputs()
+
+
+class MultiTargetRebindNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return INPUTS
+
+
+NODE_CLASS_MAPPINGS = {
+    "MultiTargetRebindNode": MultiTargetRebindNode,
+}
+'''
+        result = self._extract_source(source, "multi-target-rebind-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_augmented_assignment_invalidates_static_env_value(self):
+        source = '''
+INPUTS = {
+    "required": {
+        "image": ("IMAGE",),
+    },
+}
+INPUTS += ({},)
+
+
+class AugmentedRebindNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return INPUTS
+
+
+NODE_CLASS_MAPPINGS = {
+    "AugmentedRebindNode": AugmentedRebindNode,
+}
+'''
+        result = self._extract_source(source, "augmented-rebind-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_control_flow_assignment_invalidates_static_env_value(self):
+        source = '''
+def build_inputs():
+    return {"required": {"image": ("IMAGE",)}}
+
+
+INPUTS = {
+    "required": {
+        "image": ("IMAGE",),
+    },
+}
+if True:
+    INPUTS = build_inputs()
+
+
+class ControlFlowRebindNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return INPUTS
+
+
+NODE_CLASS_MAPPINGS = {
+    "ControlFlowRebindNode": ControlFlowRebindNode,
+}
+'''
+        result = self._extract_source(source, "control-flow-rebind-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_dynamic_return_types_reassignment_skips_node(self):
+        source = '''
+def build_outputs():
+    return ("MASK",)
+
+
+class DynamicReturnTypesNode:
+    RETURN_TYPES = ("IMAGE",)
+    RETURN_TYPES = build_outputs()
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "DynamicReturnTypesNode": DynamicReturnTypesNode,
+}
+'''
+        result = self._extract_source(source, "dynamic-return-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_final_static_return_types_assignment_wins(self):
+        source = '''
+class FinalReturnTypesNode:
+    RETURN_TYPES = ("IMAGE",)
+    RETURN_TYPES = ("MASK",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "mask": ("MASK",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "FinalReturnTypesNode": FinalReturnTypesNode,
+}
+'''
+        result = self._extract_source(source, "final-return-pack")
+
+        self.assertEqual(["MASK"], result["nodes"]["FinalReturnTypesNode"]["outputs"])
+        self.assertEqual("ok", result["pack"]["status"])
 
     def test_write_artifact_is_deterministic(self):
         with tempfile.TemporaryDirectory() as tmp:
