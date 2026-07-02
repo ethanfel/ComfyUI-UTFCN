@@ -1489,6 +1489,81 @@ NODE_CLASS_MAPPINGS = {
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
 
+    def test_return_types_arbitrary_call_skips_node(self):
+        source = '''
+class ArbitraryCallReturnTypesNode:
+    RETURN_TYPES = ["IMAGE"]
+    mutate(RETURN_TYPES)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "ArbitraryCallReturnTypesNode": ArbitraryCallReturnTypesNode,
+}
+'''
+        result = self._extract_source(source, "arbitrary-call-return-types-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_return_types_alias_arbitrary_call_skips_node(self):
+        source = '''
+class AliasArbitraryCallReturnTypesNode:
+    RETURN_TYPES = ["IMAGE"]
+    ALIAS = RETURN_TYPES
+    mutate(ALIAS)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "AliasArbitraryCallReturnTypesNode": AliasArbitraryCallReturnTypesNode,
+}
+'''
+        result = self._extract_source(source, "alias-arbitrary-call-return-types-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_return_types_function_default_arbitrary_call_skips_node(self):
+        source = '''
+class DefaultArbitraryCallReturnTypesNode:
+    RETURN_TYPES = ["IMAGE"]
+
+    def helper(value=mutate(RETURN_TYPES)):
+        pass
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "DefaultArbitraryCallReturnTypesNode": DefaultArbitraryCallReturnTypesNode,
+}
+'''
+        result = self._extract_source(source, "default-arbitrary-call-return-types-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
     def test_return_names_alias_subscript_assignment_skips_node(self):
         source = '''
 class AliasSubscriptMutatedReturnNamesNode:
@@ -2723,6 +2798,55 @@ NODE_CLASS_MAPPINGS = {
 globals().update(NODE_CLASS_MAPPINGS={})
 '''
         result = self._extract_source(source, "global-update-mapping-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_arbitrary_call_invalidates_static_node_mapping(self):
+        source = '''
+class ArbitraryCallMappingNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "ArbitraryCallMappingNode": ArbitraryCallMappingNode,
+}
+mutate(NODE_CLASS_MAPPINGS)
+'''
+        result = self._extract_source(source, "arbitrary-call-mapping-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_alias_arbitrary_call_invalidates_static_node_mapping(self):
+        source = '''
+class AliasArbitraryCallMappingNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "AliasArbitraryCallMappingNode": AliasArbitraryCallMappingNode,
+}
+ALIAS = globals()["NODE_CLASS_MAPPINGS"]
+mutate(ALIAS)
+'''
+        result = self._extract_source(source, "alias-arbitrary-call-mapping-pack")
 
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])

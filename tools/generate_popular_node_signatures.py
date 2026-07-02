@@ -493,8 +493,78 @@ def _mutating_call_target_names(stmt):
     return names
 
 
+def _referenced_names(node):
+    names = set()
+
+    class ReferenceVisitor(ast.NodeVisitor):
+        def visit_Call(self, child):
+            name = _namespace_lookup_name(child)
+            if name is not None:
+                names.add(name)
+            self.generic_visit(child)
+
+        def visit_Subscript(self, child):
+            name = _namespace_subscript_name(child)
+            if name is not None:
+                names.add(name)
+            self.generic_visit(child)
+
+        def visit_Name(self, child):
+            names.add(child.id)
+
+    ReferenceVisitor().visit(node)
+    return names
+
+
+def _arbitrary_call_observed_names(stmt):
+    names = set()
+
+    class ArbitraryCallVisitor(ast.NodeVisitor):
+        def _visit_function_definition_expressions(self, node):
+            for decorator in node.decorator_list:
+                self.visit(decorator)
+            self.visit(node.args)
+            if node.returns is not None:
+                self.visit(node.returns)
+            for type_param in getattr(node, "type_params", ()):
+                self.visit(type_param)
+
+        def visit_FunctionDef(self, node):
+            self._visit_function_definition_expressions(node)
+
+        def visit_AsyncFunctionDef(self, node):
+            self._visit_function_definition_expressions(node)
+
+        def visit_ClassDef(self, node):
+            for decorator in node.decorator_list:
+                self.visit(decorator)
+            for base in node.bases:
+                self.visit(base)
+            for keyword in node.keywords:
+                self.visit(keyword.value)
+            for type_param in getattr(node, "type_params", ()):
+                self.visit(type_param)
+            for child in node.body:
+                self.visit(child)
+
+        def visit_Lambda(self, node):
+            self.visit(node.args)
+
+        def visit_Call(self, node):
+            if isinstance(node.func, ast.Attribute):
+                names.update(_referenced_names(node.func.value))
+            for arg in node.args:
+                names.update(_referenced_names(arg))
+            for keyword in node.keywords:
+                names.update(_referenced_names(keyword.value))
+            self.generic_visit(node)
+
+    ArbitraryCallVisitor().visit(stmt)
+    return names
+
+
 def _assigned_names_in_control_flow(stmt):
-    names = _mutating_call_target_names(stmt)
+    names = _mutating_call_target_names(stmt) | _arbitrary_call_observed_names(stmt)
 
     class AssignmentVisitor(ast.NodeVisitor):
         def visit_FunctionDef(self, node):
@@ -536,6 +606,7 @@ def _assigned_names_in_control_flow(stmt):
 
         def visit_Expr(self, node):
             names.update(_mutating_call_target_names(node))
+            names.update(_arbitrary_call_observed_names(node))
             names.update(_named_expr_target_names(node))
 
         def visit_With(self, node):
@@ -808,9 +879,14 @@ def _class_attr(cls, name, env):
     aliases = set()
     for stmt in cls.body:
         mutating_targets = _mutating_call_target_names(stmt)
+        observed_targets = _arbitrary_call_observed_names(stmt)
         if aliases.intersection(mutating_targets):
             value = _INVALID
         if name in mutating_targets:
+            value = _INVALID
+        if aliases.intersection(observed_targets):
+            value = _INVALID
+        if name in observed_targets:
             value = _INVALID
         if isinstance(stmt, ast.Assign):
             target_names = _assignment_target_names(stmt)
@@ -1179,6 +1255,7 @@ def _update_module_dict_alias_from_unpack(target, value, name, aliases):
 def _module_dict_alias_invalidated(stmt, aliases):
     names = (
         _mutating_call_target_names(stmt)
+        | _arbitrary_call_observed_names(stmt)
         | _assignment_target_names(stmt)
         | _delete_target_names(stmt)
         | _bound_names(stmt)
@@ -1231,6 +1308,8 @@ def _final_module_dict(tree, name, value_converter, value_invalidated_by_names=N
         ):
             value = _INVALID
         if _name_invalidated_by(name, _mutating_call_target_names(stmt)):
+            value = _INVALID
+        if _name_invalidated_by(name, _arbitrary_call_observed_names(stmt)):
             value = _INVALID
         if _module_dict_alias_invalidated(stmt, module_dict_aliases):
             value = _INVALID
