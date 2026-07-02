@@ -42,6 +42,36 @@ const sourceInfo = (type) => INDEX?.sources?.[type];
 const isCustom = (type) => sourceInfo(type)?.source === "custom";
 const candidatesFor = (type) => INDEX?.candidates?.[type] || [];
 
+// The type key to look a node up by. ComfyUI keeps an UNINSTALLED ("missing")
+// node as a placeholder whose original type lives in last_serialization.type.
+const nodeType = (n) => n?.last_serialization?.type || n?.comfyClass || n?.type;
+const isMissing = (n) => !!n?.has_errors || (INDEX && !INDEX.sources?.[nodeType(n)]);
+
+// Missing nodes aren't in the registry, so /utfcn/scan can't know their signature.
+// Ask the backend to match them from the serialized slots ComfyUI preserved, and
+// fold the results into INDEX.candidates so the rest of the code is agnostic.
+async function matchMissing() {
+    if (!INDEX) await loadIndex();
+    const items = [], seen = new Set();
+    for (const n of app.graph?._nodes || []) {
+        const t = nodeType(n);
+        if (!t || seen.has(t) || INDEX.candidates[t] || INDEX.sources[t]) continue; // known/installed
+        const s = n.last_serialization;
+        if (!s) continue;
+        seen.add(t);
+        const inputs = {};
+        (s.inputs || []).forEach((inp) => { if (inp?.name) inputs[inp.name] = inp.type; });
+        items.push({ type: t, inputs, outputs: (s.outputs || []).map((o) => o.type), output_names: (s.outputs || []).map((o) => o.name) });
+    }
+    if (!items.length) return;
+    try {
+        const r = await app.api.fetchApi("/utfcn/match", {
+            method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ nodes: items }),
+        });
+        Object.assign(INDEX.candidates, (await r.json()).candidates || {});
+    } catch (e) { console.error("[UTFCN] match failed:", e); }
+}
+
 function toast(severity, detail, life = 5000) {
     try { app.extensionManager?.toast?.add?.({ severity, summary: EXT, detail, life }); }
     catch { /* older ComfyUI: no toast API */ }
@@ -165,7 +195,7 @@ function applySwap(node, plan, rule) {
 
 /** First verified candidate whose swap is feasible right now (used by force mode). */
 function firstVerifiedPlan(node) {
-    for (const c of candidatesFor(node.type)) {
+    for (const c of candidatesFor(nodeType(node))) {
         if (!c.verified) continue;
         const plan = planSwap(node, c.to, c);
         if (plan.ok) return { cand: c, plan };
@@ -268,13 +298,14 @@ function showPreview(rows) {
     }
 
     rows.forEach(({ node, cands }, i) => {
-        const info = sourceInfo(node.type);
+        const t = nodeType(node);
+        const pack = sourceInfo(t)?.pack || (isMissing(node) ? "⚠ not installed" : "?");
         const opts = cands.map((c, k) =>
             `<option value="${k}">${c.verified ? "✓" : "⚠"} ${c.to_display} · ${c.source === "core" ? "core" : c.pack}</option>`).join("");
         const tr = document.createElement("tr");
         tr.innerHTML = `
           <td><input type="checkbox"></td>
-          <td><span class="utfcn-from">${node.title || node.type}</span> <span class="utfcn-pack">#${node.id} · ${info?.pack || "?"}</span></td>
+          <td><span class="utfcn-from">${node.title || t}</span> <span class="utfcn-pack">#${node.id} · ${pack}</span></td>
           <td><span class="utfcn-arrow">→</span> <select>${opts}</select></td>
           <td class="utfcn-status"></td>`;
         tbody.appendChild(tr);
@@ -325,10 +356,10 @@ function showPreview(rows) {
 
 async function openBulkDialog() {
     if (!INDEX) await loadIndex();
+    await matchMissing();               // include uninstalled / red "missing" nodes
     const rows = [];
     for (const node of app.graph?._nodes || []) {
-        if (!isCustom(node.type)) continue;
-        const cands = candidatesFor(node.type);
+        const cands = candidatesFor(nodeType(node));
         if (cands.length) rows.push({ node, cands });
     }
     if (!rows.length) { toast("info", "No custom nodes with a known core / available equivalent here 🎉"); return; }
@@ -349,21 +380,26 @@ function replaceSingle(node, cand) {
     }
 }
 
-function addContextMenu(nodeType) {
-    const orig = nodeType.prototype.getExtraMenuOptions;
-    nodeType.prototype.getExtraMenuOptions = function (canvas, options) {
-        orig?.apply(this, arguments);
+// Patch the canvas-level menu builder (not per-node-type) so the item also
+// appears on UNINSTALLED "missing" placeholders, which never register a type.
+function installMenu() {
+    const C = window.LGraphCanvas;
+    if (!C || C.prototype.__utfcn_menu) return;
+    C.prototype.__utfcn_menu = true;
+    const orig = C.prototype.getNodeMenuOptions;
+    C.prototype.getNodeMenuOptions = function (node) {
+        const options = orig ? orig.apply(this, arguments) : [];
         try {
-            if (!isCustom(this.type)) return;
-            const cands = candidatesFor(this.type);
-            if (!cands.length) return;
-            const submenu = cands.map((c) => ({
-                content: `${c.verified ? "✓" : "⚠"} ${c.to_display} ${c.source === "core" ? "(core)" : "(" + c.pack + ")"}`,
-                callback: () => replaceSingle(this, c),
-            }));
-            options.push(null); // separator
-            options.push({ content: "🔁 Replace with core / available", has_submenu: true, submenu: { options: submenu } });
+            const cands = candidatesFor(nodeType(node));
+            if (cands.length) {
+                const submenu = cands.map((c) => ({
+                    content: `${c.verified ? "✓" : "⚠"} ${c.to_display} ${c.source === "core" ? "(core)" : "(" + c.pack + ")"}`,
+                    callback: () => replaceSingle(node, c),
+                }));
+                options.push(null, { content: "🔁 Replace with core / available", has_submenu: true, submenu: { options: submenu } });
+            }
         } catch (e) { console.error("[UTFCN] menu error:", e); }
+        return options;
     };
 }
 
@@ -385,13 +421,14 @@ function guardGraphLoading() {
     app.loadGraphData = async function (...a) {
         loadingGraph = true;
         try { return await orig(...a); }
-        finally { setTimeout(() => { loadingGraph = false; }, 150); }
+        finally { setTimeout(() => { loadingGraph = false; matchMissing(); }, 150); } // pick up missing nodes
     };
 }
 
 function onNodeAdded(node) {
     if (loadingGraph || ADD_MODE === "Off") return;
-    if (!isCustom(node.type) || !candidatesFor(node.type).length) return;
+    const t = nodeType(node);
+    if (!isCustom(t) || !candidatesFor(t).length) return;
     addQueue.push(node);
     clearTimeout(addTimer);
     addTimer = setTimeout(flushAdds, 250); // let the add settle, and batch pastes
@@ -419,7 +456,7 @@ function flushAdds() {
     }
 
     // Suggest mode: one quiet tip per unique type (stay silent on big pastes)
-    const types = [...new Set(nodes.map((n) => n.type))];
+    const types = [...new Set(nodes.map((n) => nodeType(n)))];
     if (types.length > 4) return;
     types.forEach((tp) => {
         const cands = candidatesFor(tp);
@@ -473,17 +510,13 @@ app.registerExtension({
         { path: ["Extensions", "UTFCN"], commands: ["UTFCN.replaceAll", "UTFCN.refresh"] },
     ],
 
-    // installed for every node type; the body no-ops unless the node is a custom
-    // node that actually has a candidate (checked live at click time).
-    beforeRegisterNodeDef(nodeType) {
-        addContextMenu(nodeType);
-    },
-
     async setup() {
         await loadIndex();
+        installMenu();          // right-click item (covers installed AND missing nodes)
         guardGraphLoading();
         hookNodeAdded();
+        matchMissing();         // in case a workflow is already open at startup
         const s = INDEX?.stats;
-        if (s?.replaceable) console.log(`[UTFCN] ${s.replaceable}/${s.custom} custom node type(s) have a core/available equivalent (${s.verified} verified).`);
+        if (s?.replaceable) console.log(`[UTFCN] ${s.replaceable} replaceable type(s): ${s.verified} verified, ${s.uninstalled ?? 0} for uninstalled packs.`);
     },
 });

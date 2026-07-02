@@ -23,6 +23,17 @@ It does three things:
 Nothing is ever swapped without your say-so, and the engine only rewires slots
 it can move *losslessly* — anything it can't map is reported, not guessed.
 
+### Works on uninstalled ("missing") nodes
+
+The headline case: open a downloaded workflow full of red **missing** nodes and
+replace them with core equivalents **without installing the packs at all**.
+ComfyUI keeps each missing node as a placeholder that remembers its original
+type and wiring, so UTFCN can still match and swap it — via a curated rule (by
+name) or by matching the node's *serialized* signature against your core nodes.
+Both "Replace…" and the right-click item work on them; the bulk dialog labels
+them `⚠ not installed`. (Widget values aren't carried for a node whose
+definition you don't have — links are.)
+
 ## How it decides what's equivalent
 
 The backend reads the live node registry (real `INPUT_TYPES` / `RETURN_TYPES`
@@ -36,6 +47,10 @@ and each node's source module) and ranks candidates in three tiers:
 
 "Available" means core is preferred, and if there's no core match it will offer
 an equivalent from a **different installed pack** as a fallback.
+
+For an **uninstalled** node only *curated* (by name) and *partial* (by its
+serialized link signature) can apply — the exact tier needs the widget-level
+signature, which a node you haven't installed can't provide.
 
 ## Shipped equivalences
 

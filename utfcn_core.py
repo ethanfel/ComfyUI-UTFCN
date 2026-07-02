@@ -149,18 +149,15 @@ def load_rules(base_dir):
     return merged
 
 
-def build_index(rules):
+def build_context(rules):
     """
-    Build the full equivalence index for the current node registry.
+    Snapshot the live node registry once (signatures + source of every node).
+
+    Returned context is reused by build_index() (the /utfcn/scan payload) and by
+    match() (per-workflow matching of UNINSTALLED nodes), so the expensive walk
+    only happens on refresh.
 
     `rules` is the merged curated mapping: {sourceType: [ {to, note, inputs, widgets, outputs}, ... ]}.
-
-    Returns:
-        {
-          "sources":    {type: {"source": "core"|"custom", "pack": str, "display": str}},
-          "candidates": {customType: [candidate, ...]},   # only custom nodes with >=1 candidate
-          "stats":      {...},
-        }
     """
     import nodes  # imported here so the module stays importable outside ComfyUI
 
@@ -170,8 +167,7 @@ def build_index(rules):
     sources, sigs = {}, {}
     for name, cls in classes.items():
         module = _module_of(cls)
-        kind = _source_kind(module)
-        sources[name] = {"source": kind, "pack": _pack_of(module), "display": displays.get(name, name)}
+        sources[name] = {"source": _source_kind(module), "pack": _pack_of(module), "display": displays.get(name, name)}
         sigs[name] = _signature(cls)
 
     # Bucket every potential *target* by its first output type so a source only
@@ -180,32 +176,38 @@ def build_index(rules):
     for name in classes:
         by_out[_first_output_type(sigs[name])].append(name)
 
-    candidates = {}
-    verified_count = 0
-    for src_name, meta in sources.items():
-        if meta["source"] != "custom":
+    return {"sources": sources, "sigs": sigs, "by_out": by_out, "rules": rules}
+
+
+def _candidates_for(src_name, src_sig, src_pack, ctx):
+    """
+    Rank replacement candidates for one source node.
+
+    `src_sig` may be None (an uninstalled node we know only by name) — then only
+    curated rules apply. If a signature is given (installed node, or a missing
+    node's serialized signature), exact/partial tiers are added too.
+    `src_pack` is None for uninstalled/unknown sources (skips same-pack exclusion).
+    """
+    sources, sigs, by_out, rules = ctx["sources"], ctx["sigs"], ctx["by_out"], ctx["rules"]
+    found, seen = [], set()
+
+    # --- tier 1: curated rules (ordered preference; core-first is the author's job) ---
+    for rule in rules.get(src_name, []):
+        to = rule.get("to")
+        if not to or to == src_name or to not in sources or to in seen:
             continue
-        src_sig = sigs[src_name]
-        src_pack = meta["pack"]
-        found, seen = [], set()
+        seen.add(to)
+        found.append(_candidate(to, sources, "curated", 1.0, rule))
 
-        # --- tier 1: curated rules (ordered preference; core-first is the author's job) ---
-        for rule in rules.get(src_name, []):
-            to = rule.get("to")
-            if not to or to == src_name or to not in classes or to in seen:
-                continue
-            seen.add(to)
-            found.append(_candidate(to, sources, "curated", 1.0, rule))
-
-        # --- tiers 2 & 3: signature matching within the same output bucket ---
-        bucket = by_out.get(_first_output_type(src_sig), [])
+    # --- tiers 2 & 3: signature matching within the same output bucket ---
+    if src_sig is not None:
         ranked = []
-        for cand_name in bucket:
+        for cand_name in by_out.get(_first_output_type(src_sig), []):
             if cand_name in seen or cand_name == src_name:
                 continue
             cand_meta = sources[cand_name]
             # target must be core, or a DIFFERENT installed pack (fallback-to-available)
-            if cand_meta["source"] == "custom" and cand_meta["pack"] == src_pack:
+            if cand_meta["source"] == "custom" and src_pack is not None and cand_meta["pack"] == src_pack:
                 continue
             cand_sig = sigs[cand_name]
             if not _feasible(src_sig, cand_sig):
@@ -217,11 +219,10 @@ def build_index(rules):
                 if sc >= _PARTIAL_THRESHOLD:
                     ranked.append((cand_name, "partial", sc))
 
-        # order: core before pack; exact before partial; higher score first
         ranked.sort(key=lambda r: (
-            0 if sources[r[0]]["source"] == "core" else 1,
-            0 if r[1] == "exact" else 1,
-            -r[2],
+            0 if sources[r[0]]["source"] == "core" else 1,   # core before pack
+            0 if r[1] == "exact" else 1,                      # exact before partial
+            -r[2],                                            # higher score first
         ))
         for cand_name, tier, sc in ranked:
             if cand_name in seen:
@@ -229,18 +230,77 @@ def build_index(rules):
             seen.add(cand_name)
             found.append(_candidate(cand_name, sources, tier, sc, None))
 
+    return found[:_MAX_CANDIDATES]
+
+
+def build_index(ctx):
+    """
+    Build the /utfcn/scan payload from a context.
+
+    Covers INSTALLED custom nodes (curated + signature tiers) AND uninstalled
+    source types that a curated rule targets an installed node for — so a rule
+    still fires on a node whose pack you never installed.
+
+    Returns { "sources": {...}, "candidates": {srcType: [candidate,...]}, "stats": {...} }.
+    """
+    sources = ctx["sources"]
+    candidates = {}
+
+    for src_name, meta in sources.items():
+        if meta["source"] != "custom":
+            continue
+        found = _candidates_for(src_name, ctx["sigs"][src_name], meta["pack"], ctx)
         if found:
-            candidates[src_name] = found[:_MAX_CANDIDATES]
-            if any(c["verified"] for c in candidates[src_name]):
-                verified_count += 1
+            candidates[src_name] = found
+
+    # curated rules whose SOURCE isn't installed (the "replace a missing node
+    # without installing its pack" case) — no signature, so curated-only.
+    uninstalled = 0
+    for src_name in ctx["rules"]:
+        if src_name in sources or src_name in candidates:
+            continue
+        found = _candidates_for(src_name, None, None, ctx)
+        if found:
+            candidates[src_name] = found
+            uninstalled += 1
 
     stats = {
         "nodes": len(sources),
         "custom": sum(1 for m in sources.values() if m["source"] == "custom"),
         "replaceable": len(candidates),
-        "verified": verified_count,
+        "verified": sum(1 for cl in candidates.values() if any(c["verified"] for c in cl)),
+        "uninstalled": uninstalled,
     }
     return {"sources": sources, "candidates": candidates, "stats": stats}
+
+
+def match(ctx, items):
+    """
+    Match a batch of nodes given only their (possibly serialized) signature —
+    used for UNINSTALLED / missing nodes in an open workflow.
+
+    `items`: [ {"type": str, "inputs": {name: TYPE}, "outputs": [TYPE], "output_names": [..]} ].
+    Serialized nodes only carry link slots (not widget values), so 'exact' rarely
+    fires; curated rules (by type name) and 'partial' link-type matches do.
+
+    Returns { type: [candidate, ...] }.
+    """
+    out = {}
+    for it in items:
+        t = it.get("type")
+        if not t or t in out:
+            continue
+        inputs = {k: str(v) for k, v in (it.get("inputs") or {}).items()}
+        sig = {
+            "inputs": inputs,
+            "required": set(inputs),
+            "outputs": [str(x) for x in (it.get("outputs") or [])],
+            "output_names": list(it.get("output_names") or []),
+        }
+        found = _candidates_for(t, sig, None, ctx)
+        if found:
+            out[t] = found
+    return out
 
 
 def _candidate(to, sources, tier, score, rule):
