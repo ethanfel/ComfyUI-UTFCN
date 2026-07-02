@@ -18,6 +18,21 @@ class UnsupportedStaticExpression(Exception):
 
 _MISSING = object()
 _INVALID = object()
+_MUTATING_METHODS = {
+    "add",
+    "append",
+    "clear",
+    "discard",
+    "extend",
+    "insert",
+    "pop",
+    "popitem",
+    "remove",
+    "reverse",
+    "setdefault",
+    "sort",
+    "update",
+}
 
 
 def _literal(node, env):
@@ -67,6 +82,26 @@ def _assignment_target_names(stmt):
     return set()
 
 
+def _delete_target_names(stmt):
+    if not isinstance(stmt, ast.Delete):
+        return set()
+    names = set()
+    for target in stmt.targets:
+        names.update(_target_names(target))
+    return names
+
+
+def _mutating_call_target_names(stmt):
+    if not isinstance(stmt, ast.Expr):
+        return set()
+    call = stmt.value
+    if not isinstance(call, ast.Call) or not isinstance(call.func, ast.Attribute):
+        return set()
+    if call.func.attr not in _MUTATING_METHODS:
+        return set()
+    return _target_names(call.func.value)
+
+
 def _assigned_names_in_control_flow(stmt):
     names = set()
 
@@ -88,6 +123,12 @@ def _assigned_names_in_control_flow(stmt):
 
         def visit_AugAssign(self, node):
             names.update(_assignment_target_names(node))
+
+        def visit_Delete(self, node):
+            names.update(_delete_target_names(node))
+
+        def visit_Expr(self, node):
+            names.update(_mutating_call_target_names(node))
 
         def visit_For(self, node):
             names.update(_assignment_target_names(node))
@@ -134,6 +175,14 @@ def _collect_module_env(tree):
             for name in _assignment_target_names(stmt):
                 env.pop(name, None)
             continue
+        if isinstance(stmt, ast.Delete):
+            for name in _delete_target_names(stmt):
+                env.pop(name, None)
+            continue
+        if isinstance(stmt, ast.Expr):
+            for name in _mutating_call_target_names(stmt):
+                env.pop(name, None)
+            continue
         if isinstance(stmt, (ast.If, ast.For, ast.AsyncFor, ast.While, ast.Try)):
             for name in _assigned_names_in_control_flow(stmt):
                 env.pop(name, None)
@@ -177,6 +226,14 @@ def _class_attr(cls, name, env):
             continue
         if isinstance(stmt, ast.AugAssign):
             if isinstance(stmt.target, ast.Name) and stmt.target.id == name:
+                value = _INVALID
+            continue
+        if isinstance(stmt, ast.Delete):
+            if name in _delete_target_names(stmt):
+                value = _INVALID
+            continue
+        if isinstance(stmt, ast.Expr):
+            if name in _mutating_call_target_names(stmt):
                 value = _INVALID
             continue
         if isinstance(stmt, (ast.If, ast.For, ast.AsyncFor, ast.While, ast.Try)):
@@ -254,6 +311,14 @@ def _final_module_dict(tree, env, name, value_converter):
             continue
         if isinstance(stmt, ast.AugAssign):
             if _name_is_assigned(stmt, name):
+                value = _INVALID
+            continue
+        if isinstance(stmt, ast.Delete):
+            if name in _delete_target_names(stmt):
+                value = _INVALID
+            continue
+        if isinstance(stmt, ast.Expr):
+            if name in _mutating_call_target_names(stmt):
                 value = _INVALID
             continue
         if isinstance(stmt, (ast.If, ast.For, ast.AsyncFor, ast.While, ast.Try)):

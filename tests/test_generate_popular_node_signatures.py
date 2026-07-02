@@ -312,6 +312,33 @@ NODE_CLASS_MAPPINGS = {
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
 
+    def test_delete_invalidates_static_env_value(self):
+        source = '''
+INPUTS = {
+    "required": {
+        "image": ("IMAGE",),
+    },
+}
+del INPUTS
+
+
+class DeletedInputEnvNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return INPUTS
+
+
+NODE_CLASS_MAPPINGS = {
+    "DeletedInputEnvNode": DeletedInputEnvNode,
+}
+'''
+        result = self._extract_source(source, "deleted-input-env-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
     def test_dynamic_return_types_reassignment_skips_node(self):
         source = '''
 def build_outputs():
@@ -336,6 +363,54 @@ NODE_CLASS_MAPPINGS = {
 }
 '''
         result = self._extract_source(source, "dynamic-return-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_delete_return_types_skips_node(self):
+        source = '''
+class DeletedReturnTypesNode:
+    RETURN_TYPES = ("IMAGE",)
+    del RETURN_TYPES
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "DeletedReturnTypesNode": DeletedReturnTypesNode,
+}
+'''
+        result = self._extract_source(source, "deleted-return-types-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_mutated_return_types_skips_node(self):
+        source = '''
+class MutatedReturnTypesNode:
+    RETURN_TYPES = ["IMAGE"]
+    RETURN_TYPES.clear()
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "MutatedReturnTypesNode": MutatedReturnTypesNode,
+}
+'''
+        result = self._extract_source(source, "mutated-return-types-pack")
 
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
@@ -388,6 +463,30 @@ NODE_CLASS_MAPPINGS = {
 NODE_CLASS_MAPPINGS = build_mappings()
 '''
         result = self._extract_source(source, "dynamic-mapping-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_mutated_node_class_mapping_skips_node(self):
+        source = '''
+class MutatedMappingNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "MutatedMappingNode": MutatedMappingNode,
+}
+NODE_CLASS_MAPPINGS.clear()
+'''
+        result = self._extract_source(source, "mutated-mapping-pack")
 
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
