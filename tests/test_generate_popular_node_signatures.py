@@ -1730,6 +1730,110 @@ PatchedInputTypesNode.INPUT_TYPES = build_inputs
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
 
+    def test_duplicate_node_mapping_key_with_dynamic_value_skips_node(self):
+        source = '''
+def build_node():
+    return object()
+
+
+class DuplicateMappingKeyNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "DuplicateMappingKeyNode": DuplicateMappingKeyNode,
+    "DuplicateMappingKeyNode": build_node(),
+}
+'''
+        result = self._extract_source(source, "duplicate-mapping-key-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_module_class_alias_patch_after_mapping_skips_node(self):
+        source = '''
+class AliasPatchedNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "AliasPatchedNode": AliasPatchedNode,
+}
+Alias = AliasPatchedNode
+Alias.RETURN_TYPES = ("MASK",)
+'''
+        result = self._extract_source(source, "alias-patched-node-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_definition_time_class_attribute_mutation_after_mapping_skips_node(self):
+        source = '''
+class DefinitionTimeMutatedMappedNode:
+    RETURN_TYPES = ["IMAGE"]
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "DefinitionTimeMutatedMappedNode": DefinitionTimeMutatedMappedNode,
+}
+def helper(x=DefinitionTimeMutatedMappedNode.RETURN_TYPES.clear()):
+    pass
+'''
+        result = self._extract_source(source, "definition-time-mutated-mapped-node-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_unhashable_node_mapping_key_skips_repo_without_raising(self):
+        source = '''
+KEY = ["UnhashableMappingKeyNode"]
+
+
+class UnhashableMappingKeyNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    KEY: UnhashableMappingKeyNode,
+}
+'''
+        result = self._extract_source(source, "unhashable-mapping-key-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
     def test_mutated_node_class_mapping_skips_node(self):
         source = '''
 class MutatedMappingNode:
