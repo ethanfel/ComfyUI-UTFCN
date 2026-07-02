@@ -2222,6 +2222,30 @@ globals()["GlobalsClassReturnTypesNode"].RETURN_TYPES.clear()
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
 
+    def test_globals_get_class_return_types_mutation_after_mapping_skips_node(self):
+        source = '''
+class GlobalsGetReturnTypesNode:
+    RETURN_TYPES = ["IMAGE"]
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "GlobalsGetReturnTypesNode": GlobalsGetReturnTypesNode,
+}
+globals().get("GlobalsGetReturnTypesNode").RETURN_TYPES.clear()
+'''
+        result = self._extract_source(source, "globals-get-return-types-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
     def test_module_class_tuple_alias_patch_after_mapping_skips_node(self):
         source = '''
 class TupleAliasPatchedNode:
@@ -2342,6 +2366,30 @@ NODE_CLASS_MAPPINGS = {
 globals()["NODE_CLASS_MAPPINGS"].clear()
 '''
         result = self._extract_source(source, "global-mutated-mapping-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_globals_update_invalidates_static_node_mapping(self):
+        source = '''
+class GlobalUpdateNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "GlobalUpdateNode": GlobalUpdateNode,
+}
+globals().update(NODE_CLASS_MAPPINGS={})
+'''
+        result = self._extract_source(source, "global-update-mapping-pack")
 
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
