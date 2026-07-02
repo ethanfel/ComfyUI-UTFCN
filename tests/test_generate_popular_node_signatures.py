@@ -2047,6 +2047,59 @@ NODE_CLASS_MAPPINGS = {
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
 
+    def test_module_class_attribute_tuple_alias_mutation_skips_node(self):
+        source = '''
+class TupleAttributeAliasNode:
+    RETURN_TYPES = ["IMAGE"]
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+RET, = (TupleAttributeAliasNode.RETURN_TYPES,)
+RET.clear()
+
+NODE_CLASS_MAPPINGS = {
+    "TupleAttributeAliasNode": TupleAttributeAliasNode,
+}
+'''
+        result = self._extract_source(source, "tuple-attribute-alias-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_module_class_attribute_transitive_alias_mutation_skips_node(self):
+        source = '''
+class TransitiveAttributeAliasNode:
+    RETURN_TYPES = ["IMAGE"]
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+RET = TransitiveAttributeAliasNode.RETURN_TYPES
+ALIAS = RET
+ALIAS.clear()
+
+NODE_CLASS_MAPPINGS = {
+    "TransitiveAttributeAliasNode": TransitiveAttributeAliasNode,
+}
+'''
+        result = self._extract_source(source, "transitive-attribute-alias-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
     def test_module_class_attribute_alias_mutation_after_mapping_skips_node(self):
         source = '''
 class PostMappingAttributeAliasNode:
@@ -2168,6 +2221,31 @@ NODE_CLASS_MAPPINGS = {
 NODE_CLASS_MAPPINGS.clear()
 '''
         result = self._extract_source(source, "mutated-mapping-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_unpacked_alias_mutation_invalidates_static_node_mapping(self):
+        source = '''
+class UnpackedAliasMutatedMappingNode:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "UnpackedAliasMutatedMappingNode": UnpackedAliasMutatedMappingNode,
+}
+ALIAS, = (NODE_CLASS_MAPPINGS,)
+ALIAS.clear()
+'''
+        result = self._extract_source(source, "unpacked-alias-mutated-mapping-pack")
 
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
