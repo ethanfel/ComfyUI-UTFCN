@@ -2482,6 +2482,60 @@ NODE_CLASS_MAPPINGS = {
         self.assertEqual({}, result["nodes"])
         self.assertEqual("no_static_nodes", result["pack"]["status"])
 
+    def test_no_arg_class_body_arbitrary_call_before_return_types_skips_node(self):
+        source = '''
+RET = ("IMAGE",)
+
+
+class NoArgClassBodyCallBeforeReturnTypesNode:
+    mutate()
+    RETURN_TYPES = RET
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "NoArgClassBodyCallBeforeReturnTypesNode": NoArgClassBodyCallBeforeReturnTypesNode,
+}
+'''
+        result = self._extract_source(source, "no-arg-class-body-call-before-return-types-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
+    def test_no_arg_class_body_arbitrary_call_before_input_types_skips_node(self):
+        source = '''
+SPEC = ("IMAGE",)
+
+
+class NoArgClassBodyCallBeforeInputTypesNode:
+    mutate()
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": SPEC,
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    "NoArgClassBodyCallBeforeInputTypesNode": NoArgClassBodyCallBeforeInputTypesNode,
+}
+'''
+        result = self._extract_source(source, "no-arg-class-body-call-before-input-types-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
+
     def test_return_types_alias_arbitrary_call_skips_node(self):
         source = '''
 class AliasArbitraryCallReturnTypesNode:
@@ -3195,6 +3249,33 @@ KEY = "Wrong"
         self.assertNotIn("Wrong", result["nodes"])
         self.assertEqual(["IMAGE"], result["nodes"]["Original"]["outputs"])
         self.assertEqual("ok", result["pack"]["status"])
+
+    def test_no_arg_arbitrary_call_invalidates_immutable_env_mapping_key(self):
+        source = '''
+KEY = "OldNode"
+mutate()
+
+
+class Node:
+    RETURN_TYPES = ("IMAGE",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+
+NODE_CLASS_MAPPINGS = {
+    KEY: Node,
+}
+'''
+        result = self._extract_source(source, "no-arg-call-immutable-key-pack")
+
+        self.assertEqual({}, result["nodes"])
+        self.assertEqual("no_static_nodes", result["pack"]["status"])
 
     def test_non_string_node_mapping_key_skips_node(self):
         source = '''

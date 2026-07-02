@@ -1053,9 +1053,7 @@ def _apply_module_stmt_to_env(stmt, env, class_bindings=None):
         if name in env and _is_mutable_static_value(env[name]):
             _invalidate_env_name(env, name)
     if _has_arbitrary_call(stmt):
-        for name, value in list(env.items()):
-            if _is_mutable_static_value(value):
-                _invalidate_env_name(env, name)
+        env.clear()
         if class_bindings is not None and not isinstance(
             stmt, (ast.Assign, ast.AnnAssign, ast.AugAssign, ast.Delete)
         ):
@@ -1278,6 +1276,7 @@ def _update_input_types_aliases_from_unpack(target, value, aliases):
 
 def _class_attr(cls, name, env):
     value = _MISSING
+    sticky_invalid = False
     aliases = set()
     namespace_mutations = _class_body_namespace_mutation_names(cls)
     if _name_invalidated_by(name, namespace_mutations):
@@ -1287,8 +1286,9 @@ def _class_attr(cls, name, env):
         observed_targets = _arbitrary_call_observed_names(stmt)
         expression_references = _class_body_expression_referenced_names(stmt)
         has_arbitrary_call = _has_arbitrary_call(stmt)
-        if value not in (_MISSING, _INVALID) and has_arbitrary_call:
+        if has_arbitrary_call:
             value = _INVALID
+            sticky_invalid = True
         if aliases.intersection(mutating_targets):
             value = _INVALID
         if name in mutating_targets:
@@ -1334,6 +1334,9 @@ def _class_attr(cls, name, env):
                 aliases.difference_update(target_names)
             if name not in target_names:
                 continue
+            if sticky_invalid:
+                value = _INVALID
+                continue
             if len(stmt.targets) == 1 and isinstance(stmt.targets[0], ast.Name):
                 if _is_mutable_env_reference(stmt.value, env):
                     value = _INVALID
@@ -1361,6 +1364,9 @@ def _class_attr(cls, name, env):
             if name not in target_names:
                 continue
             if isinstance(stmt.target, ast.Name) and stmt.value is None:
+                continue
+            if sticky_invalid:
+                value = _INVALID
                 continue
             if not isinstance(stmt.target, ast.Name):
                 value = _INVALID
@@ -1432,7 +1438,7 @@ def _input_types(cls, env, decorator_env):
         has_arbitrary_call = _has_arbitrary_call(stmt)
         protected_definition_references = _CLASS_SIGNATURE_ATTRS | aliases
         input_types_invalidated = (
-            (value not in (_MISSING, _INVALID) and has_arbitrary_call)
+            has_arbitrary_call
             or "INPUT_TYPES" in mutating_targets
             or bool(aliases.intersection(mutating_targets))
             or "INPUT_TYPES" in observed_targets
