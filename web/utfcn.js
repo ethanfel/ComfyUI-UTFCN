@@ -6,7 +6,7 @@ import { app } from "../../scripts/app.js";
  * The backend (/utfcn/scan) tells us, for every custom node type, which core (or
  * other-pack) nodes could stand in for it, split into:
  *   verified  — curated rule or an identical signature; safe to auto-apply.
- *   partial   — structurally compatible but looser; a suggestion to confirm.
+ *   partial   — structurally and semantically compatible but looser; confirm first.
  *
  * This file turns that into three things:
  *   1. a toast tip when you interactively drop a replaceable custom node;
@@ -61,7 +61,13 @@ async function matchMissing() {
         seen.add(t);
         const inputs = {};
         (s.inputs || []).forEach((inp) => { if (inp?.name) inputs[inp.name] = inp.type; });
-        items.push({ type: t, inputs, outputs: (s.outputs || []).map((o) => o.type), output_names: (s.outputs || []).map((o) => o.name) });
+        items.push({
+            type: t,
+            display: s.title || n.title || t,
+            inputs,
+            outputs: (s.outputs || []).map((o) => o.type),
+            output_names: (s.outputs || []).map((o) => o.name),
+        });
     }
     if (!items.length) return;
     try {

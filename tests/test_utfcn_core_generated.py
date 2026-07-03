@@ -158,6 +158,30 @@ class GeneratedSignatureMatchingTests(unittest.TestCase):
                 "outputs": ["IMAGE"],
                 "output_names": ["image"],
             },
+            "ImageBlur": {
+                "inputs": {"image": "IMAGE", "radius": "INT"},
+                "required": {"image", "radius"},
+                "outputs": ["IMAGE"],
+                "output_names": ["image"],
+            },
+            "ImageResize": {
+                "inputs": {"image": "IMAGE", "width": "INT", "height": "INT"},
+                "required": {"image", "width", "height"},
+                "outputs": ["IMAGE"],
+                "output_names": ["image"],
+            },
+            "PrimitiveString": {
+                "inputs": {"value": "STRING"},
+                "required": {"value"},
+                "outputs": ["STRING"],
+                "output_names": ["text"],
+            },
+            "TextTruncate": {
+                "inputs": {"text": "STRING", "max_length": "INT"},
+                "required": {"text", "max_length"},
+                "outputs": ["STRING"],
+                "output_names": ["text"],
+            },
             "CuratedTarget": {
                 "inputs": {"image": "IMAGE"},
                 "required": {"image"},
@@ -169,6 +193,10 @@ class GeneratedSignatureMatchingTests(unittest.TestCase):
             "CoreImageSize": {"source": "core", "pack": "nodes", "display": "Core Image Size"},
             "CoreMaskInvert": {"source": "core", "pack": "nodes", "display": "Core Mask Invert"},
             "CoreImagePassthrough": {"source": "core", "pack": "nodes", "display": "Core Image Passthrough"},
+            "ImageBlur": {"source": "core", "pack": "nodes", "display": "Image Blur"},
+            "ImageResize": {"source": "core", "pack": "nodes", "display": "Image Resize"},
+            "PrimitiveString": {"source": "core", "pack": "nodes", "display": "String"},
+            "TextTruncate": {"source": "core", "pack": "nodes", "display": "Text Truncate"},
             "CuratedTarget": {"source": "core", "pack": "nodes", "display": "Curated Target"},
         }
         by_out = defaultdict(list)
@@ -358,6 +386,79 @@ class GeneratedSignatureMatchingTests(unittest.TestCase):
         self.assertEqual("CoreMaskInvert", result["SerializedMaskInvert"][0]["to"])
         self.assertEqual("partial", result["SerializedMaskInvert"][0]["tier"])
         self.assertFalse(result["SerializedMaskInvert"][0]["verified"])
+
+    def test_text_entry_node_does_not_match_text_transform_candidate(self):
+        result = utfcn_core.match(
+            self._ctx(),
+            [
+                {
+                    "type": "SomeCustomTextBox",
+                    "display": "Text Box",
+                    "outputs": ["STRING"],
+                    "output_names": ["text"],
+                }
+            ],
+        )
+
+        self.assertEqual(["PrimitiveString"], [cand["to"] for cand in result["SomeCustomTextBox"]])
+
+    def test_generated_text_entry_display_does_not_match_text_transform_candidate(self):
+        generated = _empty_generated()
+        generated["sigs"]["OpaqueCustomNode"] = {
+            "inputs": {},
+            "required": set(),
+            "outputs": ["STRING"],
+            "output_names": ["text"],
+        }
+        generated["meta"]["OpaqueCustomNode"] = {
+            "source": "generated",
+            "pack": "text-pack",
+            "display": "Text Box",
+            "repository": "https://github.com/example/text-pack",
+            "confidence": "static_exact",
+        }
+        generated["by_out"]["STRING"].append("OpaqueCustomNode")
+
+        result = utfcn_core.match(
+            self._ctx(generated=generated),
+            [{"type": "OpaqueCustomNode"}],
+        )
+
+        self.assertEqual(["PrimitiveString"], [cand["to"] for cand in result["OpaqueCustomNode"]])
+
+    def test_text_transform_node_can_match_same_transform_feature(self):
+        result = utfcn_core.match(
+            self._ctx(),
+            [
+                {
+                    "type": "LegacyTextTruncate",
+                    "display": "Text Truncate",
+                    "inputs": {"text": "STRING"},
+                    "outputs": ["STRING"],
+                    "output_names": ["text"],
+                }
+            ],
+        )
+
+        self.assertEqual("TextTruncate", result["LegacyTextTruncate"][0]["to"])
+        self.assertEqual("partial", result["LegacyTextTruncate"][0]["tier"])
+        self.assertFalse(result["LegacyTextTruncate"][0]["verified"])
+
+    def test_image_transform_node_does_not_match_different_transform_feature(self):
+        result = utfcn_core.match(
+            self._ctx(),
+            [
+                {
+                    "type": "LegacyImageBlur",
+                    "display": "Image Blur",
+                    "inputs": {"image": "IMAGE"},
+                    "outputs": ["IMAGE"],
+                    "output_names": ["image"],
+                }
+            ],
+        )
+
+        self.assertEqual(["ImageBlur"], [cand["to"] for cand in result["LegacyImageBlur"]])
 
 
 if __name__ == "__main__":

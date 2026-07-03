@@ -52,7 +52,7 @@ and each node's source module) and ranks candidates in three tiers:
 |------|---------|---------------|
 | **curated** | a hand-written rule in `mappings.json` / `user_mappings.json` | yes (verified) |
 | **exact**   | identical input names+types and output types to a core/other-pack node | yes (verified) |
-| **partial** | can structurally stand in (accepts all inputs, provides all outputs) but names/slots differ | suggestion only |
+| **partial** | can structurally and semantically stand in (compatible slots plus matching feature intent) but names/slots differ | suggestion only |
 
 "Available" means core is preferred, and if there's no core match it will offer
 an equivalent from a **different installed pack** as a fallback.
@@ -61,7 +61,7 @@ For an **uninstalled** node, UTFCN tries curated rules by name first, then any
 bundled generated signature for that node type, then the serialized link
 signature preserved in the workflow. Generated exact signatures can produce
 verified exact matches, but name-only metadata never can; loose structural
-matches remain suggestions.
+matches are filtered by feature intent and remain suggestions.
 
 ## Shipped equivalences
 

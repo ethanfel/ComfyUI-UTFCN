@@ -17,9 +17,9 @@ We answer it in three tiers, from most to least trustworthy:
     exact     the candidate's signature (input name→type map + ordered output
               types) is IDENTICAL to the source's.  Safe to remap by name.
               Verified.
-    partial   the candidate can structurally accept every input the source has
-              and provides every output type the source has, but names / extra
-              slots differ.  A *suggestion* only — never auto-applied.
+    partial   the candidate can structurally accept every input the source has,
+              provides every output type the source has, and matches the same
+              feature intent.  A *suggestion* only — never auto-applied.
 
 The frontend consumes the result: `verified` candidates power auto-replace,
 `partial` ones are shown for the user to confirm.
@@ -27,6 +27,7 @@ The frontend consumes the result: `verified` candidates power auto-replace,
 
 import json
 import os
+import re
 from collections import Counter, defaultdict
 
 # Top-level python modules we consider "core" (shipped with ComfyUI itself).
@@ -36,6 +37,48 @@ CORE_TOPLEVEL = ("nodes", "comfy_extras", "comfy_api_nodes", "comfy_api")
 # Widget-ish primitive types.  These are values the user types, not graph links,
 # so they matter for widget-value transfer but not for link compatibility.
 WIDGET_TYPES = frozenset({"INT", "FLOAT", "STRING", "BOOLEAN", "COMBO"})
+
+_TEXT_TYPES = frozenset({"STRING", "STRING_LIST"})
+_TEXT_NEUTRAL_TOKENS = frozenset(
+    {
+        "any",
+        "box",
+        "constant",
+        "input",
+        "literal",
+        "multi",
+        "multiline",
+        "note",
+        "primitive",
+        "prompt",
+        "string",
+        "text",
+        "textarea",
+        "value",
+        "widget",
+    }
+)
+_ACTION_GROUPS = (
+    ("blur", frozenset({"blur", "smooth"})),
+    ("crop", frozenset({"crop"})),
+    ("geometry", frozenset({"downscale", "resize", "rescale", "scale", "upscale"})),
+    ("invert", frozenset({"invert", "inversion"})),
+    ("passthrough", frozenset({"identity", "pass", "passthrough", "reroute"})),
+    ("preview", frozenset({"display", "preview", "show", "view"})),
+    ("size", frozenset({"dimension", "dimensions", "height", "resolution", "size", "width"})),
+    ("concat", frozenset({"append", "combine", "concat", "concatenate", "join", "merge"})),
+    ("convert", frozenset({"cast", "convert", "float", "int", "number"})),
+    ("encode", frozenset({"clip", "conditioning", "encode", "encoder", "tokenize", "tokenizer"})),
+    ("extract", frozenset({"extract", "find", "parse", "regex", "regexp", "select"})),
+    ("format", frozenset({"format", "template"})),
+    ("io", frozenset({"file", "load", "path", "read", "save", "url", "write"})),
+    ("replace", frozenset({"remove", "replace", "substitute"})),
+    ("split", frozenset({"separate", "split", "splitter"})),
+    ("strip", frozenset({"clean", "lstrip", "rstrip", "sanitize", "strip", "trim"})),
+    ("translate", frozenset({"translate", "translator"})),
+    ("truncate", frozenset({"chop", "slice", "substring", "truncate"})),
+    ("case", frozenset({"case", "lower", "upper"})),
+)
 
 
 def _module_of(cls):
@@ -117,6 +160,81 @@ def _score(src, cand):
     shared_names = len(set(src["inputs"]) & set(cand["inputs"]))
     name_bonus = 0.15 * (shared_names / len(src["inputs"])) if src["inputs"] else 0.0
     return min(1.0, base + name_bonus)
+
+
+def _semantic_tokens(*parts):
+    text = " ".join(str(part or "") for part in parts)
+    text = re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", text)
+    text = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1 \2", text)
+    return {
+        token
+        for token in re.split(r"[^A-Za-z0-9]+", text.lower())
+        if token
+    }
+
+
+def _identity_tokens(name, meta, sig):
+    if not isinstance(meta, dict):
+        meta = {}
+    terms = [name, meta.get("display")]
+    terms.extend(sig.get("inputs", {}).keys())
+    terms.extend(sig.get("output_names") or [])
+    return _semantic_tokens(*terms)
+
+
+def _action_groups(tokens):
+    groups = {
+        group
+        for group, group_tokens in _ACTION_GROUPS
+        if tokens & group_tokens
+    }
+    if "to" in tokens and tokens & {"bool", "boolean", "float", "int", "number"}:
+        groups.add("convert")
+    return groups
+
+
+def _text_signature_kind(sig):
+    values = set(sig.get("inputs", {}).values()) | set(sig.get("outputs", []))
+    return bool(values & _TEXT_TYPES)
+
+
+def _text_value_like(tokens, sig):
+    outputs = sig.get("outputs", [])
+    inputs = sig.get("inputs", {})
+    if not outputs or not set(outputs) <= _TEXT_TYPES:
+        return False
+    if _action_groups(tokens):
+        return False
+    if len(inputs) > 1:
+        return False
+    if inputs:
+        name, typ = next(iter(inputs.items()))
+        if typ not in _TEXT_TYPES and typ != "COMBO":
+            return False
+        if not (_semantic_tokens(name) & _TEXT_NEUTRAL_TOKENS):
+            return False
+    return bool(tokens & _TEXT_NEUTRAL_TOKENS)
+
+
+def _features_compatible(src_name, src_sig, src_meta, cand_name, cand_sig, cand_meta):
+    """
+    Structural compatibility is too weak for primitive text nodes: a missing
+    text box serializes as STRING output only, which otherwise matches every
+    STRING utility.  Gate text candidates by identity tokens so text-entry
+    sources do not suggest transforms such as truncate/split/replace.
+    """
+    src_tokens = _identity_tokens(src_name, src_meta, src_sig)
+    cand_tokens = _identity_tokens(cand_name, cand_meta, cand_sig)
+    src_actions = _action_groups(src_tokens)
+    cand_actions = _action_groups(cand_tokens)
+
+    if _text_signature_kind(src_sig) and _text_signature_kind(cand_sig) and _text_value_like(src_tokens, src_sig):
+        return not cand_actions and _text_value_like(cand_tokens, cand_sig)
+
+    if src_actions or cand_actions:
+        return bool(src_actions & cand_actions)
+
+    return True
 
 
 # score below which a partial match isn't worth surfacing
@@ -267,7 +385,7 @@ def build_context(rules, generated=None):
     }
 
 
-def _candidates_for(src_name, src_sig, src_pack, ctx):
+def _candidates_for(src_name, src_sig, src_pack, ctx, src_meta=None):
     """
     Rank replacement candidates for one source node.
 
@@ -277,6 +395,8 @@ def _candidates_for(src_name, src_sig, src_pack, ctx):
     `src_pack` is None for uninstalled/unknown sources (skips same-pack exclusion).
     """
     sources, sigs, by_out, rules = ctx["sources"], ctx["sigs"], ctx["by_out"], ctx["rules"]
+    if not isinstance(src_meta, dict):
+        src_meta = sources.get(src_name, {})
     found, seen = [], set()
 
     # --- tier 1: curated rules (ordered preference; core-first is the author's job) ---
@@ -299,6 +419,8 @@ def _candidates_for(src_name, src_sig, src_pack, ctx):
                 continue
             cand_sig = sigs[cand_name]
             if not _feasible(src_sig, cand_sig):
+                continue
+            if not _features_compatible(src_name, src_sig, src_meta, cand_name, cand_sig, cand_meta):
                 continue
             if _is_exact(src_sig, cand_sig):
                 ranked.append((cand_name, "exact", 1.0))
@@ -435,7 +557,7 @@ def match(ctx, items):
     `items`: [ {"type": str, "inputs": {name: TYPE}, "outputs": [TYPE], "output_names": [..]} ].
     Serialized nodes only carry link slots (not widget values), so 'exact' rarely
     fires; curated rules (by type name), bundled generated signatures, and
-    partial link-type matches do.
+    feature-gated partial link-type matches do.
 
     Returns a mapping from source node type to candidate list.
     """
@@ -464,12 +586,13 @@ def match(ctx, items):
             if not isinstance(gen_meta, dict):
                 gen_meta = {}
             gen_pack = gen_meta.get("pack")
-            found = _candidates_for(t, gen_sig, gen_pack, ctx)
+            found = _candidates_for(t, gen_sig, gen_pack, ctx, gen_meta)
             if found:
                 out[t] = found
                 continue
 
-        found = _candidates_for(t, sig, None, ctx)
+        item_meta = {"display": it.get("display") or t}
+        found = _candidates_for(t, sig, None, ctx, item_meta)
         if found:
             out[t] = found
     return out

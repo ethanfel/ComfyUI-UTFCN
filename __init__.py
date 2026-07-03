@@ -14,7 +14,7 @@ the *analysis*: it has the live node registry, so it computes — accurately, fr
 real INPUT_TYPES / RETURN_TYPES — which custom nodes have safe equivalents.
 
   GET  /utfcn/scan[?refresh=1]   -> { sources, candidates, stats }
-  POST /utfcn/match  {nodes:[{type,inputs,outputs,output_names}]} -> { candidates }
+  POST /utfcn/match  {nodes:[{type,display,inputs,outputs,output_names}]} -> { candidates }
                                    (for UNINSTALLED / missing nodes in a workflow)
 
 Curated overrides live in mappings.json (shipped) and user_mappings.json (yours).
