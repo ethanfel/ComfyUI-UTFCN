@@ -31,8 +31,9 @@ ComfyUI keeps each missing node as a placeholder that remembers its original
 type and wiring, so UTFCN can still match and swap it — via a curated rule (by
 name) or by matching the node's *serialized* signature against your core nodes.
 Both "Replace…" and the right-click item work on them; the bulk dialog labels
-them `⚠ not installed`. (Widget values aren't carried for a node whose
-definition you don't have — links are.)
+them `⚠ not installed`. When ComfyUI preserved `widgets_values`, UTFCN carries
+those values into the same target widget slots; anything it cannot carry is
+reported in the preview.
 
 ### Popular missing-node signatures
 

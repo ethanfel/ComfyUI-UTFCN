@@ -1,4 +1,5 @@
 import { app } from "../../scripts/app.js";
+import { applyWidgetTransfers, planWidgetTransfers } from "./utfcn_widget_transfer.js";
 
 /*
  * UTFCN — Use The F***ing Core Nodes (frontend).
@@ -20,7 +21,7 @@ import { app } from "../../scripts/app.js";
 
 const EXT = "UTFCN";
 let INDEX = null;            // { sources, candidates, stats }
-const shapeCache = new Map(); // targetType -> { inputs, outputs, widgetNames } | null
+const shapeCache = new Map(); // targetType -> { inputs, outputs, widgets, widgetNames } | null
 
 /* -------------------------------------------------------------------------- */
 /* data                                                                        */
@@ -96,18 +97,17 @@ function typeOk(a, b) {
     return A.some((x) => B.includes(x));
 }
 
-/** A widget the user converted into an input slot — its value lives on the input, not the widget. */
-const isConvertedWidget = (w) => w?.type === "converted-widget" || w?.type === "hidden";
-
 /** Inspect a target type's slot/widget layout once (creating a throwaway node) and cache it. */
 function targetShape(type) {
     if (shapeCache.has(type)) return shapeCache.get(type);
     let node = null;
     try { node = window.LiteGraph.createNode(type); } catch { /* unregistered */ }
+    const widgets = (node?.widgets || []).map((w) => ({ name: w.name, type: w.type }));
     const shape = node && {
         inputs: (node.inputs || []).map((s) => ({ name: s.name, type: s.type })),
         outputs: (node.outputs || []).map((s) => ({ name: s.name, type: s.type })),
-        widgetNames: (node.widgets || []).map((w) => w.name),
+        widgets,
+        widgetNames: widgets.map((w) => w.name),
     };
     shapeCache.set(type, shape || null);
     return shape || null;
@@ -146,12 +146,9 @@ function planSwap(node, targetType, rule) {
         usedOut.add(j); outMap.push({ src: i, dst: j });
     });
 
-    (node.widgets || []).forEach((w) => {
-        if (w.name == null || isConvertedWidget(w)) return;
-        const want = rule?.widgets?.[w.name] ?? w.name;
-        if (shape.widgetNames.includes(want)) wMap.push({ from: w.name, to: want });
-        else if (w.value !== undefined && w.value !== null && w.value !== "") warns.push(`widget “${w.name}” value not carried`);
-    });
+    const widgetPlan = planWidgetTransfers(node, shape, rule, { allowSerializedIndexFallback: isMissing(node) });
+    wMap.push(...widgetPlan.wMap);
+    warns.push(...widgetPlan.warns);
 
     return { ok: problems.length === 0, problems, warns, inMap, outMap, wMap, targetType };
 }
@@ -170,11 +167,7 @@ function applySwap(node, plan, rule) {
     if (node.bgcolor) t.bgcolor = node.bgcolor;
 
     // widget values first (setting them may lay out extra widgets)
-    plan.wMap.forEach((m) => {
-        const sw = (node.widgets || []).find((w) => w.name === m.from);
-        const tw = (t.widgets || []).find((w) => w.name === m.to);
-        if (sw && tw && sw.value !== undefined) { tw.value = sw.value; try { tw.callback?.(tw.value); } catch {} }
-    });
+    applyWidgetTransfers(node, t, plan.wMap);
 
     // snapshot link records BEFORE we start mutating the graph
     const inLinks = plan.inMap
